@@ -1,0 +1,4 @@
+import type { Race } from '../game/models';
+export const raceTemplates: Omit<Race,'date'>[] = [
+ {id:'boucles-azur',name:"Boucles de l'Azur",country:'France',terrain:'vallons',distance:164,elevation:2100,prestige:42,difficulty:48}, {id:'sprint-flandres',name:'Sprint des Flandres',country:'Belgique',terrain:'sprint',distance:188,elevation:650,prestige:46,difficulty:45}, {id:'col-argent',name:"Trophée du Col d'Argent",country:'France',terrain:'montagne',distance:152,elevation:3900,prestige:55,difficulty:68}, {id:'chrono-lac',name:'Chrono du Lac',country:'Suisse',terrain:'chrono',distance:31,elevation:320,prestige:38,difficulty:52}, {id:'paves-nord',name:'Pavés du Nord',country:'Belgique',terrain:'paves',distance:204,elevation:900,prestige:62,difficulty:70}, {id:'tour-opale',name:"Classique de l'Opale",country:'France',terrain:'plaine',distance:196,elevation:1200,prestige:50,difficulty:54}
+];

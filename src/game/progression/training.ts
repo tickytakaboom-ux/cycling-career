@@ -1,0 +1,5 @@
+import type { Rider,TrainingType } from '../models';
+import { clamp,trainingConfig } from '../config';
+export function applyTraining(rider:Rider,type:TrainingType):Rider{const c=trainingConfig[type],stats={...rider.stats},gain=Math.max(0,.08+rider.hidden.learning/500)*(1-rider.fatigue/140); c.stats.forEach(k=>stats[k]=clamp(stats[k]+gain)); return {...rider,stats,fatigue:clamp(rider.fatigue+c.fatigue),form:clamp(rider.form+c.form)};}
+export function recoverDay(rider:Rider):Rider{return {...rider,fatigue:clamp(rider.fatigue-4-rider.stats.recovery/30),form:clamp(rider.form-.25,35,92)}}
+export function applyRaceProgression(rider:Rider,xp:number):Rider{const stats={...rider.stats},key=(rider.profile==='sprinteur'?'sprint':rider.profile==='rouleur'?'timeTrial':rider.profile==='classiqueur'?'pavement':rider.profile==='puncheur'?'explosiveness':'mountain') as keyof typeof stats; stats[key]=clamp(stats[key]+xp/100); return {...rider,stats,experience:rider.experience+xp,reputation:clamp(rider.reputation+xp/12),fatigue:clamp(rider.fatigue+16),form:clamp(rider.form-2)};}

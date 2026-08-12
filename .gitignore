@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Production and tool output
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editors and operating systems
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Codex working directories
+work/
+outputs/
