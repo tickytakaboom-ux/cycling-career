@@ -42,6 +42,13 @@ jobs:
       - name: Build application
         run: pnpm build
 
+      - name: Verify Pages artifact
+        shell: bash
+        run: |
+          test -f dist/index.html
+          ! grep -q '/src/main.tsx' dist/index.html
+          grep -q '/cycling-career/assets/' dist/index.html
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
