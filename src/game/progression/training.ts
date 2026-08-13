@@ -1,32 +1,41 @@
 import type { Race, RaceResult, Rider, TrainingType } from '../models';
-import { clamp,trainingConfig } from '../config';
+import { clamp,fatigueConfig,formConfig,moraleConfig,progressionConfig,recoveryConfig,trainingConfig } from '../config';
 
-function progressionGain(rider:Rider,statValue:number) {
-  const learning=.035+rider.hidden.learning/2100;
-  const potentialRoom=clamp((rider.hidden.potential-statValue)/35,.25,1.15);
-  const freshness=clamp(1-rider.fatigue/115,.2,1);
-  const ageFactor=rider.age<=20?1:rider.age<=24?.9:rider.age<=29?.7:.45;
-  return learning*potentialRoom*freshness*ageFactor;
+const tableFactor=(value:number,table:{max:number;value:number}[])=>table.find(item=>value<=item.max)?.value??1;
+
+export function trainingAllowed(rider:Rider,type:TrainingType) {
+  return type==='recuperation'||rider.fatigue+trainingConfig[type].fatigue<=fatigueConfig.trainingLimit;
 }
 
-export function applyTraining(rider:Rider,type:TrainingType):Rider {
-  const config=trainingConfig[type];
-  if(type==='recuperation') return {...rider,fatigue:clamp(rider.fatigue+config.fatigue,4,100),form:clamp(rider.form+config.form,45,88)};
-  const stats={...rider.stats};
-  config.stats.forEach(key=>stats[key]=clamp(stats[key]+progressionGain(rider,stats[key])));
-  const fatiguePenalty=Math.max(0,rider.fatigue-45)*.035;
-  return {...rider,stats,fatigue:clamp(rider.fatigue+config.fatigue,4,100),form:clamp(rider.form+config.form-fatiguePenalty,45,88)};
+export function progressionGain(rider:Rider,type:TrainingType,stat:keyof Rider['stats'],trainingQuality=1) {
+  const potential=rider.hidden.potentials[stat];
+  const remaining=Math.max(0,potential-rider.stats[stat]);
+  const potentialFactor=Math.max(progressionConfig.minimumPotentialFactor,(remaining/Math.max(1,potential))**1.35);
+  const ageFactor=tableFactor(rider.age,progressionConfig.ageFactors);
+  const fatigueFactor=tableFactor(rider.fatigue,progressionConfig.fatigueFactors);
+  const learning=.8+rider.hidden.learning/250;
+  const experience=1+Math.min(progressionConfig.experienceFactorMax,rider.experience/15000);
+  return progressionConfig.baseGain*potentialFactor*ageFactor*fatigueFactor*trainingQuality*trainingConfig[type].specialization*learning*experience;
+}
+
+export function applyTraining(rider:Rider,type:TrainingType,trainingQuality=1):Rider {
+  if(type==='recuperation'||!trainingAllowed(rider,type))return rider;
+  const config=trainingConfig[type],stats={...rider.stats};
+  config.stats.forEach(stat=>stats[stat]=clamp(Math.min(rider.hidden.potentials[stat],stats[stat]+progressionGain(rider,type,stat,trainingQuality))));
+  return {...rider,stats,fatigue:clamp(rider.fatigue+config.fatigue,fatigueConfig.minimum,fatigueConfig.maximum),form:clamp(rider.form+config.form,formConfig.minimum,formConfig.maximum),morale:clamp(rider.morale+moraleConfig.minorProgressGain,moraleConfig.minimum,moraleConfig.maximum)};
 }
 
 export function recoverDay(rider:Rider):Rider {
-  const fatigueRecovery=2.5+rider.stats.recovery/35;
-  const formChange=rider.form>76?-.65:rider.form<56?.2:-.15;
-  return {...rider,fatigue:clamp(rider.fatigue-fatigueRecovery,4,100),form:clamp(rider.form+formChange,45,88)};
+  const fatigueRatio=rider.fatigue/100;
+  const recovery=Math.min(recoveryConfig.maximumDaily,recoveryConfig.base+fatigueRatio*recoveryConfig.highFatigueBonus+rider.stats.recovery/recoveryConfig.recoveryStatDivisor);
+  const formGain=rider.form>=formConfig.highFormThreshold?-formConfig.highFormDecay:formConfig.restGain*(1-rider.form/formConfig.maximum);
+  const chronicLoss=rider.fatigue>=fatigueConfig.chronicThreshold?-fatigueConfig.chronicMoraleLoss:0;
+  return {...rider,fatigue:clamp(rider.fatigue-recovery,fatigueConfig.minimum,fatigueConfig.maximum),form:clamp(rider.form+formGain,formConfig.minimum,formConfig.maximum),morale:clamp(rider.morale+chronicLoss,moraleConfig.minimum,moraleConfig.maximum)};
 }
 
 export function applyRaceProgression(rider:Rider,result:RaceResult,race:Race):Rider {
   const stats={...rider.stats};
   const key=(rider.profile==='sprinteur'?'sprint':rider.profile==='rouleur'?'timeTrial':rider.profile==='classiqueur'?'pavement':rider.profile==='puncheur'?'explosiveness':rider.profile==='etapes'?'endurance':'mountain') as keyof typeof stats;
-  stats[key]=clamp(stats[key]+result.xpGained/450);
-  return {...rider,stats,experience:rider.experience+result.xpGained,reputation:clamp(rider.reputation+result.reputationGained),fatigue:clamp(rider.fatigue+result.fatigueCost),form:clamp(rider.form-(race.difficulty/100)*2.5,45,88)};
+  stats[key]=Math.min(rider.hidden.potentials[key],clamp(stats[key]+result.xpGained/650));
+  return {...rider,stats,experience:rider.experience+result.xpGained,reputation:clamp(rider.reputation+result.reputationGained),morale:clamp(rider.morale+result.moraleChange,moraleConfig.minimum,moraleConfig.maximum),fatigue:clamp(rider.fatigue+result.fatigueCost),form:clamp(rider.form-(race.difficulty/100)*formConfig.raceDifficultyLoss,formConfig.minimum,formConfig.maximum),injury:result.injury??rider.injury};
 }
