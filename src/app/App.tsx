@@ -588,11 +588,13 @@ function TeamView({
           results.map((race) => (
             <div className="team-race-results" key={race.id}>
               <b>{race.name}</b>
-              {race.result && <span className="player-result">{race.result.position}e · {game.rider.firstName} {game.rider.lastName}<small>{race.result.score.toFixed(1)}/100 · VOUS</small></span>}
-              {race.teamResults!.map((result) => (
-                <span key={result.riderId}>
-                  {result.position}e · {result.riderName}{" "}
-                  <small>{result.score}/100</small>
+              {[
+                ...(race.result ? [{id:"player",name:`${game.rider.firstName} ${game.rider.lastName}`,position:race.result.position,score:race.result.score,isPlayer:true}] : []),
+                ...race.teamResults!.map((result)=>({id:result.riderId,name:result.riderName,position:result.position,score:result.score,isPlayer:false})),
+              ].sort((a,b)=>a.position-b.position).map((result) => (
+                <span key={result.id} className={result.isPlayer?"player-result":undefined}>
+                  {result.position}e · {result.name}{" "}
+                  <small>{result.score.toFixed(1)}/100{result.isPlayer?" · VOUS":""}</small>
                 </span>
               ))}
             </div>
