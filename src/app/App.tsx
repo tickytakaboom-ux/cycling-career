@@ -19,6 +19,10 @@ import { trainingConfig } from "../game/config";
 import { seasonSummary } from "../game/career/careerProgression";
 import { overallRating } from "../game/career/riderRating";
 import { injuryRisk } from "../game/injuries/injurySystem";
+import {
+  moraleLabel,
+  moralePerformancePercent,
+} from "../game/morale/moraleSystem";
 import type {
   CalendarRace,
   GameState,
@@ -29,7 +33,11 @@ import type {
 } from "../game/models";
 import { restPreview, trainingPreview } from "../game/progression/previews";
 import { rainLabels, weatherEffect, windLabels } from "../game/weather/weather";
-import {riderRankings,teamRankings,u23Rankings} from "../game/world/rankings";
+import {
+  riderRankings,
+  teamRankings,
+  u23Rankings,
+} from "../game/world/rankings";
 import {
   createCareer,
   deleteSave,
@@ -45,7 +53,8 @@ import {
   unlockScouting,
 } from "../state/gameStore";
 
-type Tab = "dashboard" | "training" | "races" | "calendar" | "team" | "world" | "rider";
+type Tab =
+  "dashboard" | "training" | "races" | "calendar" | "team" | "world" | "rider";
 const profileLabels = {
   grimpeur: "Grimpeur",
   puncheur: "Puncheur",
@@ -276,10 +285,30 @@ function Offers({
           et la qualité de développement.
         </p>
       </section>
-      {nextSeason&&game.world.recap&&<section className="panel world-recap"><span className="eyebrow">BILAN DE LA SAISON {game.world.recap.year}</span><h2>{game.world.recap.champion} · meilleur coureur</h2><p>Meilleure équipe : <b>{game.world.recap.bestTeam}</b> · Transferts : {game.world.recap.transfers.length} · Retraites : {game.world.recap.retirements.length}</p><p>Jeunes révélations : {game.world.recap.youngRevelations.join(', ')||'—'} · Évolution de Julian : {game.world.recap.julianEvolution>=0?'+':''}{game.world.recap.julianEvolution}</p></section>}
+      {nextSeason && game.world.recap && (
+        <section className="panel world-recap">
+          <span className="eyebrow">
+            BILAN DE LA SAISON {game.world.recap.year}
+          </span>
+          <h2>{game.world.recap.champion} · meilleur coureur</h2>
+          <p>
+            Meilleure équipe : <b>{game.world.recap.bestTeam}</b> · Transferts :{" "}
+            {game.world.recap.transfers.length} · Retraites :{" "}
+            {game.world.recap.retirements.length}
+          </p>
+          <p>
+            Jeunes révélations :{" "}
+            {game.world.recap.youngRevelations.join(", ") || "—"} · Évolution de
+            Julian : {game.world.recap.julianEvolution >= 0 ? "+" : ""}
+            {game.world.recap.julianEvolution}
+          </p>
+        </section>
+      )}
       <div className="offer-grid">
         {game.career.offers.map((offer) => {
-          const team = game.world.teams.find(team=>team.id===offer.teamId)??teamById(offer.teamId)!;
+          const team =
+            game.world.teams.find((team) => team.id === offer.teamId) ??
+            teamById(offer.teamId)!;
           return (
             <article
               className="panel offer-card"
@@ -561,9 +590,16 @@ function TeamView({
         )}
         <div className="roster">
           <div className="player-roster-row">
-            <b>{game.rider.firstName} {game.rider.lastName} <small>VOUS</small></b>
-            <span>{game.rider.age} ans · {profileLabels[game.rider.profile]} · {contract.role}</span>
-            <strong>{overallRating(game.rider.stats,game.rider.profile)}</strong>
+            <b>
+              {game.rider.firstName} {game.rider.lastName} <small>VOUS</small>
+            </b>
+            <span>
+              {game.rider.age} ans · {profileLabels[game.rider.profile]} ·{" "}
+              {contract.role}
+            </span>
+            <strong>
+              {overallRating(game.rider.stats, game.rider.profile)}
+            </strong>
           </div>
           {game.team.roster.map((mate) => (
             <div key={mate.id}>
@@ -572,9 +608,11 @@ function TeamView({
                 {mate.age} ans · {profileLabels[mate.profile]} · {mate.role}
                 {game.career.scoutingUnlocked && (
                   <small className="mate-stats">
-                    Mont. {Math.round(mate.stats.mountain)} · Côtes {Math.round(mate.stats.climbing)} ·
-                    End. {Math.round(mate.stats.endurance)} · Sprint {Math.round(mate.stats.sprint)} ·
-                    Forme {Math.round(mate.form)}
+                    Mont. {Math.round(mate.stats.mountain)} · Côtes{" "}
+                    {Math.round(mate.stats.climbing)} · End.{" "}
+                    {Math.round(mate.stats.endurance)} · Sprint{" "}
+                    {Math.round(mate.stats.sprint)} · Forme{" "}
+                    {Math.round(mate.form)}
                   </small>
                 )}
               </span>
@@ -592,23 +630,69 @@ function TeamView({
             <div className="team-race-results" key={race.id}>
               <b>{race.name}</b>
               {[
-                ...(race.result ? [{id:"player",name:`${game.rider.firstName} ${game.rider.lastName}`,position:race.result.position,score:race.result.score,isPlayer:true}] : []),
-                ...race.teamResults!.map((result)=>({id:result.riderId,name:result.riderName,position:result.position,score:result.score,isPlayer:false})),
-              ].sort((a,b)=>a.position-b.position).map((result) => (
-                <span key={result.id} className={result.isPlayer?"player-result":undefined}>
-                  {result.position}e · {result.name}{" "}
-                  <small>{result.score.toFixed(1)}/100{result.isPlayer?" · VOUS":""}</small>
-                </span>
-              ))}
+                ...(race.result
+                  ? [
+                      {
+                        id: "player",
+                        name: `${game.rider.firstName} ${game.rider.lastName}`,
+                        position: race.result.position,
+                        score: race.result.score,
+                        isPlayer: true,
+                      },
+                    ]
+                  : []),
+                ...race.teamResults!.map((result) => ({
+                  id: result.riderId,
+                  name: result.riderName,
+                  position: result.position,
+                  score: result.score,
+                  isPlayer: false,
+                })),
+              ]
+                .sort((a, b) => a.position - b.position)
+                .map((result) => (
+                  <span
+                    key={result.id}
+                    className={result.isPlayer ? "player-result" : undefined}
+                  >
+                    {result.position}e · {result.name}{" "}
+                    <small>
+                      {result.score.toFixed(1)}/100
+                      {result.isPlayer ? " · VOUS" : ""}
+                    </small>
+                  </span>
+                ))}
             </div>
           ))
         )}
       </section>
-      <section className="panel"><h2>Mouvements de l’effectif</h2>{game.world.transfers.filter(move=>move.fromTeamId===game.team.id||move.toTeamId===game.team.id).length?game.world.transfers.filter(move=>move.fromTeamId===game.team.id||move.toTeamId===game.team.id).map(move=><p key={`${move.riderId}-${move.season}`}>{move.riderName} · {move.toTeamId===game.team.id?'Arrivée':'Départ'}</p>):<p>Aucun mouvement récent.</p>}</section>
+      <section className="panel">
+        <h2>Mouvements de l’effectif</h2>
+        {game.world.transfers.filter(
+          (move) =>
+            move.fromTeamId === game.team.id || move.toTeamId === game.team.id,
+        ).length ? (
+          game.world.transfers
+            .filter(
+              (move) =>
+                move.fromTeamId === game.team.id ||
+                move.toTeamId === game.team.id,
+            )
+            .map((move) => (
+              <p key={`${move.riderId}-${move.season}`}>
+                {move.riderName} ·{" "}
+                {move.toTeamId === game.team.id ? "Arrivée" : "Départ"}
+              </p>
+            ))
+        ) : (
+          <p>Aucun mouvement récent.</p>
+        )}
+      </section>
     </div>
   );
 }
 function RiderView({ rider }: { rider: Rider }) {
+  const impact = moralePerformancePercent(rider.morale);
   return (
     <div className="content-view">
       <section className="panel profile-summary">
@@ -633,6 +717,45 @@ function RiderView({ rider }: { rider: Rider }) {
         </div>
       </section>
       <InjuryCard rider={rider} />
+      <section className="panel morale-summary">
+        <div>
+          <span className="eyebrow">MORAL</span>
+          <h2>
+            {rider.morale.toFixed(0)}/100 — {moraleLabel(rider.morale)}
+          </h2>
+          <p>
+            Impact actuel sur la performance : {impact >= 0 ? "+" : ""}
+            {impact.toFixed(1).replace(".", ",")} %. Le moral est influencé par
+            vos résultats, votre entraînement, votre récupération et votre
+            situation dans l’équipe.
+          </p>
+        </div>
+        <div className="morale-history">
+          <h3>Dernières influences</h3>
+          {rider.moraleHistory?.length ? (
+            rider.moraleHistory.slice(0, 8).map((event) => (
+              <div
+                className={
+                  event.delta > 0 ? "morale-positive" : "morale-negative"
+                }
+                key={event.id}
+              >
+                <b>
+                  {event.delta > 0 ? "+" : "−"}
+                  {Math.abs(event.delta).toFixed(1).replace(".", ",")}
+                </b>
+                <span>{event.reason}</span>
+                <small>
+                  {event.before.toFixed(1).replace(".", ",")} →{" "}
+                  {event.after.toFixed(1).replace(".", ",")}
+                </small>
+              </div>
+            ))
+          ) : (
+            <p>Aucune influence récente enregistrée.</p>
+          )}
+        </div>
+      </section>
       <section className="panel">
         <h3>Caractéristiques</h3>
         <div className="stats-grid">
@@ -736,9 +859,137 @@ function ResultToast({
   );
 }
 
-function WorldView({game}:{game:GameState}){
-  const [u23,setU23]=useState(false),riders=(u23?u23Rankings(game.world,game):riderRankings(game.world,game)).slice(0,30),teams=teamRankings(game.world,game),teamNames=new Map(game.world.teams.map(team=>[team.id,team.name])),recap=game.world.recap;
-  return <div className="content-view world-view"><section className="page-intro"><span className="eyebrow">SAISON {game.world.year}</span><h1>Monde du cyclisme</h1><p>Classements construits à partir des résultats de la saison, de l’expérience et de la réputation.</p></section>{recap&&<section className="panel world-recap"><span className="eyebrow">BILAN {recap.year}</span><h2>{recap.champion} · champion</h2><p>Meilleure équipe : <b>{recap.bestTeam}</b> · Évolution de Julian : <b>{recap.julianEvolution>=0?'+':''}{recap.julianEvolution}</b></p><p>Révélations : {recap.youngRevelations.join(', ')||'—'} · Retraites : {recap.retirements.length}</p></section>}<div className="world-grid"><section className="panel"><div className="panel-title"><h2>Classement des coureurs</h2><button className="outline" onClick={()=>setU23(!u23)}>{u23?'VOIR LE GÉNÉRAL':'VOIR LES U23'}</button></div><div className="ranking-table"><div className="ranking-head"><span>#</span><span>Coureur</span><span>Équipe</span><span>Âge</span><span>Profil</span><span>NG</span><span>Points</span></div>{riders.map(rider=><div className={rider.isPlayer?'ranking-player':''} key={rider.id}><b>{rider.position}</b><strong>{rider.name}{rider.isPlayer?' · VOUS':''}</strong><span>{rider.teamName}</span><span>{rider.age}</span><span>{profileLabels[rider.profile as keyof typeof profileLabels]}</span><span>{rider.rating}</span><b>{rider.points}</b></div>)}</div></section><section className="panel"><h2>Classement des équipes</h2><div className="team-ranking">{teams.map(team=><div key={team.id}><b>{team.position}</b><strong>{team.name}</strong><span>Niv. {team.level}</span><span>{team.victories} victoire(s)</span><span>{team.top10} top 10</span><b>{team.points} pts</b></div>)}</div></section></div><div className="world-grid"><section className="panel"><h2>Transferts récents</h2>{game.world.transfers.length?game.world.transfers.map(move=><p key={`${move.riderId}-${move.season}`}>{move.riderName} · {teamNames.get(move.fromTeamId)} → <b>{teamNames.get(move.toTeamId)}</b></p>):<p>Aucun mouvement récent.</p>}</section><section className="panel"><h2>Jeunes talents</h2>{game.world.riders.filter(rider=>game.world.youngTalentIds.includes(rider.id)).slice(0,8).map(rider=><p key={rider.id}><b>{rider.name}</b> · {rider.age} ans · {profileLabels[rider.profile]} · NG {rider.level}</p>)}</section><section className="panel"><h2>Retraites</h2>{game.world.retirements.length?game.world.retirements.map(rider=><p key={rider.riderId}>{rider.riderName} · {rider.age} ans</p>):<p>Aucune retraite récente.</p>}</section></div></div>
+function WorldView({ game }: { game: GameState }) {
+  const [u23, setU23] = useState(false),
+    riders = (
+      u23 ? u23Rankings(game.world, game) : riderRankings(game.world, game)
+    ).slice(0, 30),
+    teams = teamRankings(game.world, game),
+    teamNames = new Map(game.world.teams.map((team) => [team.id, team.name])),
+    recap = game.world.recap;
+  return (
+    <div className="content-view world-view">
+      <section className="page-intro">
+        <span className="eyebrow">SAISON {game.world.year}</span>
+        <h1>Monde du cyclisme</h1>
+        <p>
+          Classements construits à partir des résultats de la saison, de
+          l’expérience et de la réputation.
+        </p>
+      </section>
+      {recap && (
+        <section className="panel world-recap">
+          <span className="eyebrow">BILAN {recap.year}</span>
+          <h2>{recap.champion} · champion</h2>
+          <p>
+            Meilleure équipe : <b>{recap.bestTeam}</b> · Évolution de Julian :{" "}
+            <b>
+              {recap.julianEvolution >= 0 ? "+" : ""}
+              {recap.julianEvolution}
+            </b>
+          </p>
+          <p>
+            Révélations : {recap.youngRevelations.join(", ") || "—"} · Retraites
+            : {recap.retirements.length}
+          </p>
+        </section>
+      )}
+      <div className="world-grid">
+        <section className="panel">
+          <div className="panel-title">
+            <h2>Classement des coureurs</h2>
+            <button className="outline" onClick={() => setU23(!u23)}>
+              {u23 ? "VOIR LE GÉNÉRAL" : "VOIR LES U23"}
+            </button>
+          </div>
+          <div className="ranking-table">
+            <div className="ranking-head">
+              <span>#</span>
+              <span>Coureur</span>
+              <span>Équipe</span>
+              <span>Âge</span>
+              <span>Profil</span>
+              <span>NG</span>
+              <span>Points</span>
+            </div>
+            {riders.map((rider) => (
+              <div
+                className={rider.isPlayer ? "ranking-player" : ""}
+                key={rider.id}
+              >
+                <b>{rider.position}</b>
+                <strong>
+                  {rider.name}
+                  {rider.isPlayer ? " · VOUS" : ""}
+                </strong>
+                <span>{rider.teamName}</span>
+                <span>{rider.age}</span>
+                <span>
+                  {profileLabels[rider.profile as keyof typeof profileLabels]}
+                </span>
+                <span>{rider.rating}</span>
+                <b>{rider.points}</b>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <h2>Classement des équipes</h2>
+          <div className="team-ranking">
+            {teams.map((team) => (
+              <div key={team.id}>
+                <b>{team.position}</b>
+                <strong>{team.name}</strong>
+                <span>Niv. {team.level}</span>
+                <span>{team.victories} victoire(s)</span>
+                <span>{team.top10} top 10</span>
+                <b>{team.points} pts</b>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+      <div className="world-grid">
+        <section className="panel">
+          <h2>Transferts récents</h2>
+          {game.world.transfers.length ? (
+            game.world.transfers.map((move) => (
+              <p key={`${move.riderId}-${move.season}`}>
+                {move.riderName} · {teamNames.get(move.fromTeamId)} →{" "}
+                <b>{teamNames.get(move.toTeamId)}</b>
+              </p>
+            ))
+          ) : (
+            <p>Aucun mouvement récent.</p>
+          )}
+        </section>
+        <section className="panel">
+          <h2>Jeunes talents</h2>
+          {game.world.riders
+            .filter((rider) => game.world.youngTalentIds.includes(rider.id))
+            .slice(0, 8)
+            .map((rider) => (
+              <p key={rider.id}>
+                <b>{rider.name}</b> · {rider.age} ans ·{" "}
+                {profileLabels[rider.profile]} · NG {rider.level}
+              </p>
+            ))}
+        </section>
+        <section className="panel">
+          <h2>Retraites</h2>
+          {game.world.retirements.length ? (
+            game.world.retirements.map((rider) => (
+              <p key={rider.riderId}>
+                {rider.riderName} · {rider.age} ans
+              </p>
+            ))
+          ) : (
+            <p>Aucune retraite récente.</p>
+          )}
+        </section>
+      </div>
+    </div>
+  );
 }
 function Dashboard({
   game,
@@ -823,15 +1074,15 @@ function Dashboard({
                 ? "Mon équipe"
                 : tab === "world"
                   ? "Monde du cyclisme"
-                : tab === "rider"
-                  ? "Mon coureur"
-                  : tab === "training"
-                    ? "Entraînement"
-                    : tab === "calendar"
-                      ? "Calendrier"
-                      : tab === "races"
-                        ? "Courses"
-                        : "Journée du coureur"}
+                  : tab === "rider"
+                    ? "Mon coureur"
+                    : tab === "training"
+                      ? "Entraînement"
+                      : tab === "calendar"
+                        ? "Calendrier"
+                        : tab === "races"
+                          ? "Courses"
+                          : "Journée du coureur"}
             </h2>
           </div>
         </header>

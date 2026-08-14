@@ -1,5 +1,6 @@
 import type {
   CalendarRace,
+  ContractObjective,
   GameState,
   RaceResult,
   RaceStrategy,
@@ -43,7 +44,19 @@ import {
 import { simulateRace } from "../game/simulation/raceSimulation";
 import type { RandomSource } from "../game/simulation/random";
 import { generateWeather } from "../game/weather/weather";
-import {createWorld,evolveWorld,recordWorldRace} from "../game/world/worldSimulation";
+import {
+  createWorld,
+  evolveWorld,
+  recordWorldRace,
+} from "../game/world/worldSimulation";
+import {
+  applyMoraleEvent,
+  annualProgressionMoraleDelta,
+  injuryMoraleDelta,
+  nextMoraleStreak,
+  restMoraleDelta,
+  resultMoraleReason,
+} from "../game/morale/moraleSystem";
 
 export const SAVE_KEY = "cycling-career-v1";
 const GAME_VERSION = 3;
@@ -71,9 +84,27 @@ const updateStatuses = (calendar: CalendarRace[], date: string) =>
   );
 const advanceRiderDay = (rider: Rider, rest: boolean) =>
     healOneDay(rest ? recoverDay(rider) : rider),
-  recoverAcrossDays = (rider: Rider, days: number) => {
+  recoverAcrossDays = (rider: Rider, days: number, startDate: string) => {
     let value = rider;
-    for (let day = 0; day < days; day++) value = advanceRiderDay(value, true);
+    for (let day = 0; day < days; day++) {
+      const date = addDays(startDate, day),
+        fatigue = value.fatigue;
+      value = advanceRiderDay(value, true);
+      value = applyMoraleEvent(value, {
+        id: `rest-${date}`,
+        date,
+        delta: restMoraleDelta(fatigue),
+        reason:
+          fatigue <= 30
+            ? "Repos avec fatigue faible"
+            : fatigue <= 60
+              ? "Récupération maîtrisée"
+              : fatigue >= 75
+                ? "Fatigue élevée"
+                : "Repos",
+        category: "rest",
+      });
+    }
     return value;
   };
 const season = (year = 2027) => ({
@@ -94,9 +125,14 @@ const careerBase = () => ({
   totalEarnings: 0,
   objectiveBonuses: 0,
   scoutingUnlocked: false,
+  moraleStreak: { top20: 0, poor: 0 },
 });
 export function createCareer(rider: Rider): GameState {
-  const current = season(),world={...createWorld(current.year),playerPreviousRating:overallRating(rider.stats,rider.profile)};
+  const current = season(),
+    world = {
+      ...createWorld(current.year),
+      playerPreviousRating: overallRating(rider.stats, rider.profile),
+    };
   return {
     gameVersion: GAME_VERSION,
     careerId: crypto.randomUUID(),
@@ -112,7 +148,10 @@ export function createCareer(rider: Rider): GameState {
 }
 export function createGame(rider: Rider): GameState {
   const start = "2027-02-01",
-    world={...createWorld(),playerPreviousRating:overallRating(rider.stats,rider.profile)},
+    world = {
+      ...createWorld(),
+      playerPreviousRating: overallRating(rider.stats, rider.profile),
+    },
     offer = generateOffers(rider)[2] ?? generateOffers(rider)[0],
     contract = resolveOffer(offer).contract;
   return {
@@ -139,7 +178,7 @@ export function createGame(rider: Rider): GameState {
 export function signContract(game: GameState, offerId: string): GameState {
   const offer = game.career.offers.find((item) => item.id === offerId);
   if (!offer) return { ...game, notice: "Cette offre n’est plus disponible." };
-  const { team, contract } = resolveOffer(offer,game.world.teams);
+  const { team, contract } = resolveOffer(offer, game.world.teams);
   return {
     ...game,
     team,
@@ -246,13 +285,25 @@ export function migrateGame(saved: GameState): GameState {
           })),
         }
       : undefined,
-    world=saved.world??{...createWorld(saved.season?.year??2027),playerPreviousRating:overallRating(saved.rider.stats,saved.rider.profile)};
+    world = saved.world ?? {
+      ...createWorld(saved.season?.year ?? 2027),
+      playerPreviousRating: overallRating(
+        saved.rider.stats,
+        saved.rider.profile,
+      ),
+    };
   return {
     ...saved,
     gameVersion: GAME_VERSION,
     currentDate,
     season: saved.season ?? season(),
-    rider: { ...saved.rider, profile, hidden },
+    rider: {
+      ...saved.rider,
+      profile,
+      hidden,
+      moraleHistory: saved.rider.moraleHistory ?? [],
+      moraleAppliedEventIds: saved.rider.moraleAppliedEventIds ?? [],
+    },
     team,
     world,
     career: {
@@ -260,6 +311,7 @@ export function migrateGame(saved: GameState): GameState {
       contract,
       objectiveBonuses: oldCareer.objectiveBonuses ?? 0,
       scoutingUnlocked: oldCareer.scoutingUnlocked ?? false,
+      moraleStreak: oldCareer.moraleStreak ?? { top20: 0, poor: 0 },
       level: careerLevel(saved.rider.reputation, saved.rider.experience),
     },
     calendar: updateStatuses(calendar, currentDate),
@@ -291,7 +343,22 @@ export function nextDay(game: GameState): GameState {
   if (game.calendar.some((race) => race.status === "available"))
     return { ...game, notice: "Une course est prévue aujourd’hui." };
   const currentDate = addDays(game.currentDate, 1),
-    rider = advanceRiderDay(game.rider, true);
+    fatigue = game.rider.fatigue,
+    recovered = advanceRiderDay(game.rider, true),
+    rider = applyMoraleEvent(recovered, {
+      id: `rest-${game.currentDate}`,
+      date: game.currentDate,
+      delta: restMoraleDelta(fatigue),
+      reason:
+        fatigue <= 30
+          ? "Repos avec fatigue faible"
+          : fatigue <= 60
+            ? "Récupération maîtrisée"
+            : fatigue >= 75
+              ? "Fatigue élevée"
+              : "Repos",
+      category: "rest",
+    });
   return salaryForDate(
     {
       ...game,
@@ -334,14 +401,26 @@ export function train(
       { kind: "training", type },
       random,
     ),
-    morale = injury
-      ? Math.max(0, trained.morale - moraleConfig.injuryLoss[injury.severity])
-      : trained.morale,
-    rider = advanceRiderDay(
-      { ...trained, morale, injury: injury ?? trained.injury },
+    advanced = advanceRiderDay(
+      { ...trained, injury: injury ?? trained.injury },
       false,
     ),
     currentDate = addDays(game.currentDate, 1);
+  let rider = applyMoraleEvent(advanced, {
+    id: `training-${game.currentDate}`,
+    date: game.currentDate,
+    delta: moraleConfig.trainingGain,
+    reason: "Entraînement réussi",
+    category: "training",
+  });
+  if (injury)
+    rider = applyMoraleEvent(rider, {
+      id: `injury-training-${injury.id}`,
+      date: game.currentDate,
+      delta: injuryMoraleDelta(injury.severity),
+      reason: `Blessure : ${injury.name}`,
+      category: "injury",
+    });
   return salaryForDate(
     {
       ...game,
@@ -353,6 +432,78 @@ export function train(
     },
     currentDate,
   );
+}
+function applyRaceMorale(
+  game: GameState,
+  rider: Rider,
+  result: RaceResult,
+  objectives: ContractObjective[],
+  seasonFinished: boolean,
+) {
+  let value = applyMoraleEvent(rider, {
+    id: `race-result-${result.raceId}`,
+    date: game.currentDate,
+    delta: result.moraleChange,
+    reason: resultMoraleReason(result.position, result.fieldSize),
+    category: "race",
+  });
+  if (result.injury)
+    value = applyMoraleEvent(value, {
+      id: `injury-race-${result.injury.id}`,
+      date: game.currentDate,
+      delta: injuryMoraleDelta(result.injury.severity),
+      reason: `Blessure en course : ${result.injury.name}`,
+      category: "injury",
+    });
+  const previous = game.career.contract?.objectives ?? [];
+  for (const objective of objectives) {
+    if (
+      objective.status === "completed" &&
+      previous.find((item) => item.id === objective.id)?.status !== "completed"
+    )
+      value = applyMoraleEvent(value, {
+        id: `objective-success-${game.season.year}-${objective.id}`,
+        date: game.currentDate,
+        delta: moraleConfig.objectiveSuccess,
+        reason: `Objectif atteint : ${objective.label}`,
+        category: "objective",
+      });
+  }
+  const oldStreak = game.career.moraleStreak ?? { top20: 0, poor: 0 },
+    { streak } = nextMoraleStreak(oldStreak, result.position, result.fieldSize);
+  if (streak.top20 === 3)
+    value = applyMoraleEvent(value, {
+      id: `streak-top20-${result.raceId}`,
+      date: game.currentDate,
+      delta: moraleConfig.streakBonus,
+      reason: "Série de 3 top 20",
+      category: "streak",
+    });
+  if (streak.poor === 3)
+    value = applyMoraleEvent(value, {
+      id: `streak-poor-${result.raceId}`,
+      date: game.currentDate,
+      delta: moraleConfig.streakPenalty,
+      reason: "Série de 3 résultats difficiles",
+      category: "streak",
+    });
+  const finalObjectives = objectives.map((objective) =>
+    seasonFinished && objective.status !== "completed"
+      ? { ...objective, status: "failed" as const }
+      : objective,
+  );
+  if (seasonFinished)
+    for (const objective of finalObjectives) {
+      if (objective.status === "failed")
+        value = applyMoraleEvent(value, {
+          id: `objective-failed-${game.season.year}-${objective.id}`,
+          date: game.currentDate,
+          delta: moraleConfig.objectiveFailure,
+          reason: `Objectif non atteint : ${objective.label}`,
+          category: "objective",
+        });
+    }
+  return { rider: value, streak, objectives: finalObjectives };
 }
 export function race(
   game: GameState,
@@ -392,7 +543,6 @@ export function race(
     },
     afterRace = applyRaceProgression(game.rider, result, target),
     currentDate = addDays(game.currentDate, 1),
-    rider = advanceRiderDay(afterRace, false),
     calendar = game.calendar.map((item) =>
       item.id === raceId
         ? ({
@@ -409,8 +559,16 @@ export function race(
       afterRace.reputation,
     ),
     claimed = claimObjectiveBonuses(tracked),
+    allDone = calendar.every((item) => item.status === "completed"),
+    moraleOutcome = applyRaceMorale(
+      game,
+      advanceRiderDay(afterRace, false),
+      result,
+      claimed.objectives,
+      allDone,
+    ),
     contract = game.career.contract
-      ? { ...game.career.contract, objectives: claimed.objectives }
+      ? { ...game.career.contract, objectives: moraleOutcome.objectives }
       : undefined,
     nextCareer = {
       ...game.career,
@@ -419,15 +577,15 @@ export function race(
       objectiveBonuses: game.career.objectiveBonuses + claimed.bonus,
       level: careerLevel(afterRace.reputation, afterRace.experience),
       contract,
+      moraleStreak: moraleOutcome.streak,
     },
-    allDone = calendar.every((item) => item.status === "completed"),
     next = {
       ...game,
       team,
-      world:recordWorldRace(game.world,{...target,teamResults}),
+      world: recordWorldRace(game.world, { ...target, teamResults }),
       currentDate,
       lastResult: result,
-      rider,
+      rider: moraleOutcome.rider,
       career: nextCareer,
       notice: claimed.bonus
         ? `Prime d’objectif : +${claimed.bonus} €.`
@@ -460,7 +618,7 @@ export function advanceToNextRace(game: GameState): GameState {
   return {
     ...game,
     currentDate: nextRace.date,
-    rider: recoverAcrossDays(game.rider, days),
+    rider: recoverAcrossDays(game.rider, days, game.currentDate),
     notice: `Repos automatique pendant ${days} jour${days > 1 ? "s" : ""}.`,
     calendar: updateStatuses(game.calendar, nextRace.date),
   };
@@ -470,6 +628,8 @@ export function prepareNextSeasonOffers(game: GameState): GameState {
       (item) => (item.result?.position ?? 99) <= 10,
     ).length,
     rating = overallRating(game.rider.stats, game.rider.profile),
+    previousRating = game.world.playerPreviousRating ?? rating,
+    ratingDelta = rating - previousRating,
     role = evaluateRole(
       game.career.contract?.role ?? "Équipier",
       rating,
@@ -478,9 +638,25 @@ export function prepareNextSeasonOffers(game: GameState): GameState {
       top10,
       game.rider.experience,
     ),
-    world=evolveWorld(game.world,game,game.season.year+1);
+    world = evolveWorld(game.world, game, game.season.year + 1),
+    annualMorale = annualProgressionMoraleDelta(ratingDelta),
+    rider = applyMoraleEvent(game.rider, {
+      id: `annual-progression-${game.season.year}`,
+      date: game.currentDate,
+      delta: annualMorale,
+      reason:
+        ratingDelta >= 2
+          ? "Forte progression annuelle"
+          : ratingDelta >= 1
+            ? "Progression annuelle"
+            : ratingDelta <= -1
+              ? "Régression annuelle"
+              : "Niveau général stable",
+      category: "progression",
+    });
   return {
     ...game,
+    rider,
     world,
     career: {
       ...game.career,
@@ -498,10 +674,44 @@ export function startNextSeason(game: GameState, offerId: string): GameState {
   const offer = game.career.offers.find((item) => item.id === offerId);
   if (!offer) return game;
   const year = game.season.year + 1,
-    world=game.world.year===year?game.world:evolveWorld(game.world,game,year),
-    resolved = resolveOffer(offer,world.teams),
+    world =
+      game.world.year === year
+        ? game.world
+        : evolveWorld(game.world, game, year),
+    resolved = resolveOffer(offer, world.teams),
     team = resolved.team,
-    contract = { ...resolved.contract, role: offer.contract.role };
+    contract = { ...resolved.contract, role: offer.contract.role },
+    roleRanks = {
+      "Jeune espoir": 0,
+      Équipier: 1,
+      "Coureur protégé": 2,
+      Leader: 3,
+    },
+    oldRole = game.career.contract?.role ?? "Jeune espoir",
+    roleDelta = roleRanks[contract.role] - roleRanks[oldRole],
+    roleMorale = roleDelta > 0 ? 2 : roleDelta < 0 ? -2 : 0.5,
+    roleRider = applyMoraleEvent(game.rider, {
+      id: `contract-role-${year}-${contract.id}`,
+      date: `${year}-02-01`,
+      delta: roleMorale,
+      reason:
+        roleDelta > 0
+          ? `Promotion : ${contract.role}`
+          : roleDelta < 0
+            ? `Rôle revu : ${contract.role}`
+            : `Rôle confirmé : ${contract.role}`,
+      category: "role",
+    }),
+    contractRider =
+      team.level > game.team.level
+        ? applyMoraleEvent(roleRider, {
+            id: `contract-team-${year}-${contract.id}`,
+            date: `${year}-02-01`,
+            delta: 1,
+            reason: `Nouveau défi chez ${team.name}`,
+            category: "contract",
+          })
+        : roleRider;
   return {
     ...game,
     currentDate: `${year}-02-01`,
@@ -515,7 +725,7 @@ export function startNextSeason(game: GameState, offerId: string): GameState {
       offers: [],
       seasonEvaluation: undefined,
     },
-    rider: { ...game.rider, age: game.rider.age + 1 },
+    rider: { ...contractRider, age: game.rider.age + 1 },
     notice: `Bienvenue chez ${team.name} pour la saison ${year}.`,
   };
 }

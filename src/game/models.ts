@@ -11,7 +11,9 @@ export interface WeatherConditions { temperature:number; windSpeed:number; windD
 export interface RiderStats { mountain:number; sprint:number; climbing:number; timeTrial:number; pavement:number; endurance:number; explosiveness:number; recovery:number; descending:number; tactics:number; resistance:number; weather:number }
 export interface HiddenStats { potentials:RiderStats; consistency:number; injuryResistance:number; learning:number; mental:number }
 export interface Injury { id:string; name:string; severity:InjurySeverity; startDate:string; endDate:string; daysRemaining:number; trainingRestriction:'none'|'light-only'|'blocked'; performancePenalty:number }
-export interface Rider { id:string; firstName:string; lastName:string; nationality:string; age:number; height:number; weight:number; profile:RiderProfile; stats:RiderStats; hidden:HiddenStats; form:number; fatigue:number; morale:number; reputation:number; experience:number; injury?:Injury }
+export type MoraleCategory='race'|'training'|'rest'|'injury'|'objective'|'progression'|'contract'|'role'|'streak';
+export interface MoraleEvent { id:string; date:string; before:number; after:number; delta:number; reason:string; category:MoraleCategory }
+export interface Rider { id:string; firstName:string; lastName:string; nationality:string; age:number; height:number; weight:number; profile:RiderProfile; stats:RiderStats; hidden:HiddenStats; form:number; fatigue:number; morale:number; moraleHistory?:MoraleEvent[]; moraleAppliedEventIds?:string[]; reputation:number; experience:number; injury?:Injury }
 export type TeamLevel=1|2|3|4;
 export type TeamRole='Jeune espoir'|'Équipier'|'Coureur protégé'|'Leader';
 export type CareerLevel=1|2|3|4|5;
@@ -27,7 +29,8 @@ export type ObjectiveType='races'|'top20'|'top10-terrain'|'reputation';
 export interface ContractObjective { id:string; label:string; type:ObjectiveType; target:number; terrain?:Terrain; progress:number; reward:number; rewarded:boolean; status:'active'|'completed'|'failed' }
 export interface Contract { id:string; teamId:string; startYear:number; durationYears:number; monthlySalary:number; role:TeamRole; calendarDescription:string; opponentDescription:string; developmentRating:string; objectives:ContractObjective[] }
 export interface ContractOffer { id:string; teamId:string; contract:Contract; interestScore:number }
-export interface CareerState { level:CareerLevel; balance:number; totalEarnings:number; objectiveBonuses:number; scoutingUnlocked:boolean; contract?:Contract; offers:ContractOffer[]; seasonEvaluation?:string }
+export interface MoraleStreak { top20:number; poor:number }
+export interface CareerState { level:CareerLevel; balance:number; totalEarnings:number; objectiveBonuses:number; scoutingUnlocked:boolean; moraleStreak?:MoraleStreak; contract?:Contract; offers:ContractOffer[]; seasonEvaluation?:string }
 export interface WorldRider extends TeamMate { teamId:string; reputation:number; experience:number; seasonPoints:number; victories:number; top10:number; previousLevel:number }
 export interface TransferRecord { riderId:string; riderName:string; fromTeamId:string; toTeamId:string; season:number }
 export interface RetirementRecord { riderId:string; riderName:string; age:number; teamId:string; season:number }
