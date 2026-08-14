@@ -547,7 +547,7 @@ function TeamView({
         </div>
         {next && (
           <p className="selection-note">
-            Prochaine sélection :{" "}
+            Sélection prévisionnelle (susceptible d’évoluer avant la course) :{" "}
             {next.selectedTeamMateIds
               ?.map(
                 (id) => game.team.roster.find((mate) => mate.id === id)?.name,
@@ -557,6 +557,11 @@ function TeamView({
           </p>
         )}
         <div className="roster">
+          <div className="player-roster-row">
+            <b>{game.rider.firstName} {game.rider.lastName} <small>VOUS</small></b>
+            <span>{game.rider.age} ans · {profileLabels[game.rider.profile]} · {contract.role}</span>
+            <strong>{overallRating(game.rider.stats,game.rider.profile)}</strong>
+          </div>
           {game.team.roster.map((mate) => (
             <div key={mate.id}>
               <b>{mate.name}</b>
@@ -564,9 +569,9 @@ function TeamView({
                 {mate.age} ans · {profileLabels[mate.profile]} · {mate.role}
                 {game.career.scoutingUnlocked && (
                   <small className="mate-stats">
-                    Mont. {mate.stats.mountain} · Côtes {mate.stats.climbing} ·
-                    End. {mate.stats.endurance} · Sprint {mate.stats.sprint} ·
-                    Forme {mate.form}
+                    Mont. {Math.round(mate.stats.mountain)} · Côtes {Math.round(mate.stats.climbing)} ·
+                    End. {Math.round(mate.stats.endurance)} · Sprint {Math.round(mate.stats.sprint)} ·
+                    Forme {Math.round(mate.form)}
                   </small>
                 )}
               </span>
@@ -583,6 +588,7 @@ function TeamView({
           results.map((race) => (
             <div className="team-race-results" key={race.id}>
               <b>{race.name}</b>
+              {race.result && <span className="player-result">{race.result.position}e · {game.rider.firstName} {game.rider.lastName}<small>{race.result.score.toFixed(1)}/100 · VOUS</small></span>}
               {race.teamResults!.map((result) => (
                 <span key={result.riderId}>
                   {result.position}e · {result.riderName}{" "}
