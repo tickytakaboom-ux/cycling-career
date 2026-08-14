@@ -28,4 +28,9 @@ export interface ContractObjective { id:string; label:string; type:ObjectiveType
 export interface Contract { id:string; teamId:string; startYear:number; durationYears:number; monthlySalary:number; role:TeamRole; calendarDescription:string; opponentDescription:string; developmentRating:string; objectives:ContractObjective[] }
 export interface ContractOffer { id:string; teamId:string; contract:Contract; interestScore:number }
 export interface CareerState { level:CareerLevel; balance:number; totalEarnings:number; objectiveBonuses:number; scoutingUnlocked:boolean; contract?:Contract; offers:ContractOffer[]; seasonEvaluation?:string }
-export interface GameState { gameVersion:number; careerId:string; currentDate:string; season:SeasonState; rider:Rider; team:Team; career:CareerState; calendar:CalendarRace[]; selectedTraining:TrainingType; lastTrainingDate?:string; lastSalaryMonth?:string; notice?:string; lastResult?:RaceResult }
+export interface WorldRider extends TeamMate { teamId:string; reputation:number; experience:number; seasonPoints:number; victories:number; top10:number; previousLevel:number }
+export interface TransferRecord { riderId:string; riderName:string; fromTeamId:string; toTeamId:string; season:number }
+export interface RetirementRecord { riderId:string; riderName:string; age:number; teamId:string; season:number }
+export interface WorldRecap { year:number; champion:string; bestTeam:string; transfers:TransferRecord[]; youngRevelations:string[]; retirements:RetirementRecord[]; julianEvolution:number }
+export interface WorldState { year:number; teams:Team[]; riders:WorldRider[]; transfers:TransferRecord[]; retirements:RetirementRecord[]; youngTalentIds:string[]; playerPreviousRating?:number; recap?:WorldRecap }
+export interface GameState { gameVersion:number; careerId:string; currentDate:string; season:SeasonState; rider:Rider; team:Team; world:WorldState; career:CareerState; calendar:CalendarRace[]; selectedTraining:TrainingType; lastTrainingDate?:string; lastSalaryMonth?:string; notice?:string; lastResult?:RaceResult }

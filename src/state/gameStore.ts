@@ -43,6 +43,7 @@ import {
 import { simulateRace } from "../game/simulation/raceSimulation";
 import type { RandomSource } from "../game/simulation/random";
 import { generateWeather } from "../game/weather/weather";
+import {createWorld,evolveWorld,recordWorldRace} from "../game/world/worldSimulation";
 
 export const SAVE_KEY = "cycling-career-v1";
 const GAME_VERSION = 3;
@@ -95,7 +96,7 @@ const careerBase = () => ({
   scoutingUnlocked: false,
 });
 export function createCareer(rider: Rider): GameState {
-  const current = season();
+  const current = season(),world={...createWorld(current.year),playerPreviousRating:overallRating(rider.stats,rider.profile)};
   return {
     gameVersion: GAME_VERSION,
     careerId: crypto.randomUUID(),
@@ -103,6 +104,7 @@ export function createCareer(rider: Rider): GameState {
     season: current,
     rider,
     team: unaffiliated,
+    world,
     career: { ...careerBase(), offers: generateOffers(rider, current.year) },
     selectedTraining: "endurance",
     calendar: [],
@@ -110,6 +112,7 @@ export function createCareer(rider: Rider): GameState {
 }
 export function createGame(rider: Rider): GameState {
   const start = "2027-02-01",
+    world={...createWorld(),playerPreviousRating:overallRating(rider.stats,rider.profile)},
     offer = generateOffers(rider)[2] ?? generateOffers(rider)[0],
     contract = resolveOffer(offer).contract;
   return {
@@ -119,6 +122,7 @@ export function createGame(rider: Rider): GameState {
     season: season(),
     rider,
     team: starterTeam,
+    world,
     career: { ...careerBase(), offers: [], contract },
     selectedTraining: "endurance",
     calendar: raceTemplates.map((race, index) => ({
@@ -135,7 +139,7 @@ export function createGame(rider: Rider): GameState {
 export function signContract(game: GameState, offerId: string): GameState {
   const offer = game.career.offers.find((item) => item.id === offerId);
   if (!offer) return { ...game, notice: "Cette offre n’est plus disponible." };
-  const { team, contract } = resolveOffer(offer);
+  const { team, contract } = resolveOffer(offer,game.world.teams);
   return {
     ...game,
     team,
@@ -241,7 +245,8 @@ export function migrateGame(saved: GameState): GameState {
             rewarded: objective.rewarded ?? false,
           })),
         }
-      : undefined;
+      : undefined,
+    world=saved.world??{...createWorld(saved.season?.year??2027),playerPreviousRating:overallRating(saved.rider.stats,saved.rider.profile)};
   return {
     ...saved,
     gameVersion: GAME_VERSION,
@@ -249,6 +254,7 @@ export function migrateGame(saved: GameState): GameState {
     season: saved.season ?? season(),
     rider: { ...saved.rider, profile, hidden },
     team,
+    world,
     career: {
       ...oldCareer,
       contract,
@@ -418,6 +424,7 @@ export function race(
     next = {
       ...game,
       team,
+      world:recordWorldRace(game.world,{...target,teamResults}),
       currentDate,
       lastResult: result,
       rider,
@@ -470,9 +477,11 @@ export function prepareNextSeasonOffers(game: GameState): GameState {
       game.rider.age,
       top10,
       game.rider.experience,
-    );
+    ),
+    world=evolveWorld(game.world,game,game.season.year+1);
   return {
     ...game,
+    world,
     career: {
       ...game.career,
       offers: generateOffers(
@@ -480,6 +489,7 @@ export function prepareNextSeasonOffers(game: GameState): GameState {
         game.season.year + 1,
         game.team.id,
         role,
+        world.teams,
       ),
     },
   };
@@ -488,17 +498,16 @@ export function startNextSeason(game: GameState, offerId: string): GameState {
   const offer = game.career.offers.find((item) => item.id === offerId);
   if (!offer) return game;
   const year = game.season.year + 1,
-    resolved = resolveOffer(offer),
-    team = evolveTeam(
-      resolved.team.id === game.team.id ? game.team : resolved.team,
-      year,
-    ),
+    world=game.world.year===year?game.world:evolveWorld(game.world,game,year),
+    resolved = resolveOffer(offer,world.teams),
+    team = resolved.team,
     contract = { ...resolved.contract, role: offer.contract.role };
   return {
     ...game,
     currentDate: `${year}-02-01`,
     season: season(year),
     team,
+    world,
     calendar: generateTeamCalendar(team, year),
     career: {
       ...game.career,
