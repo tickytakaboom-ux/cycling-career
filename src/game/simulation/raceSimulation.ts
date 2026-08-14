@@ -1,6 +1,7 @@
 import type { Race,RaceResult,RaceStrategy,Rider,RiderStats } from '../models';
 import { clamp,fatigueConfig,moraleConfig,raceConfig,strategyConfig,terrainWeights } from '../config';
 import { injuryRisk,rollInjury } from '../injuries/injurySystem';
+import { weatherEffect } from '../weather/weather';
 import { gaussian,type RandomSource } from './random';
 
 export function riderBaseScore(rider:Rider,race:Race) {
@@ -17,12 +18,13 @@ export function performance(rider:Rider,race:Race,strategy:RaceStrategy='normal'
   const experience=clamp(rider.experience/raceConfig.experienceScale,0,raceConfig.experienceMaxBonus)*prestigeScale;
   const prestige=-Math.max(0,race.prestige-55)*.03;
   const injuryPenalty=rider.injury?-base*rider.injury.performancePenalty:0;
+  const weather=weatherEffect(rider,race).modifier;
   const strategyEffect=strategyConfig[strategy];
   const consistency=(rider.hidden.consistency-50)/50;
   const variance=gaussian(random)*(raceConfig.randomStdDev-consistency)*strategyEffect.variance;
   const adjustedBase=base*formFactor*fatigueFactor*moraleFactor;
-  const final=clamp(adjustedBase+age+experience+prestige+injuryPenalty+strategyEffect.performance+variance,1,100);
-  return {base,form:base*(formFactor-1),fatigue:base*(fatigueFactor-1),morale:base*(moraleFactor-1),age,experience,prestige,injury:injuryPenalty,strategy:strategyEffect.performance,variance,final};
+  const final=clamp(adjustedBase+age+experience+prestige+injuryPenalty+weather+strategyEffect.performance+variance,1,100);
+  return {base,form:base*(formFactor-1),fatigue:base*(fatigueFactor-1),morale:base*(moraleFactor-1),age,experience,prestige,injury:injuryPenalty,weather,strategy:strategyEffect.performance,variance,final};
 }
 
 function moraleChange(position:number,fieldSize:number) {
@@ -43,7 +45,9 @@ export function simulateRace(player:Rider,field:Rider[],race:Race,strategy:RaceS
   const injury=rollInjury(player,race.date,{kind:'race',terrain:race.terrain,strategy},random);
   const risk=injuryRisk(player,{kind:'race',terrain:race.terrain,strategy});
   const dayEvent=playerScore.variance>2.5?'Une journée exceptionnelle vous a permis de dépasser les attentes.':playerScore.variance<-2.5?'Un jour sans vous a coûté plusieurs places.':'Votre performance correspond au niveau attendu aujourd’hui.';
-  const events=[strategyEffect.summary,`Fatigue de course : +${fatigueCost}. Risque de blessure estimé : ${(risk*100).toFixed(1)} %.`,dayEvent];
+  const conditions=weatherEffect(player,race),weatherSummary=conditions.modifier<-.6?'Conditions météo difficiles pour votre profil.':conditions.modifier>.3?'Bonne adaptation aux conditions météo.':'Conditions météo sans impact majeur.';
+  const profileSummary=playerScore.base>=55?'Terrain favorable à vos qualités.':playerScore.base<45?'Profil de course peu adapté à vos qualités.':'Adéquation correcte avec le terrain.';
+  const events=[profileSummary,weatherSummary,strategyEffect.summary,`Fatigue de course : +${fatigueCost}. Risque de blessure estimé : ${(risk*100).toFixed(1)} %.`,dayEvent];
   if(injury)events.push(`Blessure : ${injury.name} (${injury.daysRemaining} jours estimés).`);
   return {raceId:race.id,position,fieldSize,score:+playerScore.final.toFixed(1),gap:position===1?'—':`+ ${Math.max(4,Math.round((Math.max(...scores)-playerScore.final)*9))} s`,xpGained,reputationGained:+reputationGained.toFixed(2),moraleChange:moraleChange(position,fieldSize),strategy,fatigueCost,strategySummary:strategyEffect.summary,injury,events,breakdown:playerScore};
 }

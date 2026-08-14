@@ -7,6 +7,7 @@ import { canTrain,healOneDay,rollInjury } from '../game/injuries/injurySystem';
 import { applyRaceProgression,applyTraining,recoverDay,trainingAllowed } from '../game/progression/training';
 import { simulateRace } from '../game/simulation/raceSimulation';
 import type { RandomSource } from '../game/simulation/random';
+import { generateWeather } from '../game/weather/weather';
 
 export const SAVE_KEY='cycling-career-v1';
 const GAME_VERSION=3;
@@ -20,7 +21,7 @@ function recoverAcrossDays(rider:Rider,days:number) {let value=rider;for(let day
 
 export function createGame(rider:Rider):GameState {
   const start='2027-02-01';
-  return {gameVersion:GAME_VERSION,careerId:crypto.randomUUID(),currentDate:start,season:{year:2027,startDate:start,endDate:'2027-12-31',status:'active'},rider,team:starterTeam,selectedTraining:'endurance',calendar:raceTemplates.map((race,index)=>({...race,date:addDays(start,index*12+7),status:'planned'}))};
+  return {gameVersion:GAME_VERSION,careerId:crypto.randomUUID(),currentDate:start,season:{year:2027,startDate:start,endDate:'2027-12-31',status:'active'},rider,team:starterTeam,selectedTraining:'endurance',calendar:raceTemplates.map((race,index)=>({...race,date:addDays(start,index*12+7),status:'planned',weather:generateWeather(race),maxAltitude:race.terrain==='montagne'?1850+index*110:350+index*60}))};
 }
 export function saveGame(game:GameState){localStorage.setItem(SAVE_KEY,JSON.stringify(game))}
 
@@ -30,7 +31,7 @@ export function migrateGame(saved:GameState):GameState {
   const profile=(saved.rider.profile as RiderProfile|'complet')==='complet'?'etapes':saved.rider.profile;
   const legacyHidden=saved.rider.hidden as Rider['hidden']&{potential?:number};
   const hidden={...legacyHidden,potentials:legacyHidden.potentials??defaultPotentials(saved.rider.stats)};
-  const calendar=saved.calendar.map(race=>({...race,result:migrateResult(race.result)})),earliest=calendar.filter(race=>race.status!=='completed').sort((a,b)=>a.date.localeCompare(b.date))[0];
+  const calendar=saved.calendar.map(race=>({...race,weather:race.weather??generateWeather(race),result:migrateResult(race.result)})),earliest=calendar.filter(race=>race.status!=='completed').sort((a,b)=>a.date.localeCompare(b.date))[0];
   const currentDate=earliest&&earliest.date<saved.currentDate?earliest.date:saved.currentDate;
   return {...saved,gameVersion:GAME_VERSION,currentDate,season:saved.season??{year:2027,startDate:'2027-02-01',endDate:'2027-12-31',status:'active'},rider:{...saved.rider,profile,hidden},calendar:updateStatuses(calendar,currentDate)};
 }
