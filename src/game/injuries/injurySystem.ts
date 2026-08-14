@@ -1,5 +1,5 @@
-import type { Injury, InjurySeverity, Rider, Terrain, TrainingType } from '../models';
-import { clamp, injuryConfig, trainingConfig } from '../config';
+import type { Injury, InjurySeverity, RaceStrategy, Rider, Terrain, TrainingType } from '../models';
+import { clamp, injuryConfig, strategyConfig, trainingConfig } from '../config';
 import type { RandomSource } from '../simulation/random';
 
 const restrictions:Record<InjurySeverity,Injury['trainingRestriction']>={minor:'light-only',moderate:'blocked',serious:'blocked',severe:'blocked'};
@@ -13,18 +13,21 @@ export function canTrain(rider:Rider,type:TrainingType) {
   return trainingConfig[type].light;
 }
 
-export function injuryRisk(rider:Rider,context:{kind:'training';type:TrainingType}|{kind:'race';terrain:Terrain;aggressive:boolean}) {
+type InjuryContext={kind:'training';type:TrainingType}|{kind:'race';terrain:Terrain;strategy:RaceStrategy};
+
+export function injuryRisk(rider:Rider,context:InjuryContext) {
   const base=context.kind==='training'?injuryConfig.baseTrainingRisk:injuryConfig.baseRaceRisk;
   const fatigue=factorFor(rider.fatigue);
   const overload=context.kind==='training'&&!trainingConfig[context.type].light?injuryConfig.overloadMultiplier:1;
+  const intensive=context.kind==='training'&&context.type==='explosivite'?injuryConfig.intensiveMultiplier:1;
   const terrain=context.kind==='race'?injuryConfig.terrainMultipliers[context.terrain]:1;
-  const aggression=context.kind==='race'&&context.aggressive?1.25:1;
+  const strategy=context.kind==='race'?strategyConfig[context.strategy].injuryMultiplier:1;
   const lowForm=rider.form<50?injuryConfig.lowFormMultiplier:1;
   const resistance=clamp(1-(rider.hidden.injuryResistance-50)/180,.65,1.15);
-  return clamp(base*fatigue*overload*terrain*aggression*lowForm*resistance,0,.25);
+  return clamp(base*fatigue*overload*intensive*terrain*strategy*lowForm*resistance,0,.25);
 }
 
-export function rollInjury(rider:Rider,date:string,context:{kind:'training';type:TrainingType}|{kind:'race';terrain:Terrain;aggressive:boolean},random:RandomSource=Math.random):Injury|undefined {
+export function rollInjury(rider:Rider,date:string,context:InjuryContext,random:RandomSource=Math.random):Injury|undefined {
   if(rider.injury||random()>=injuryRisk(rider,context))return undefined;
   const roll=random();let severity:InjurySeverity='minor';let cumulative=0;
   for(const [candidate,weight] of Object.entries(injuryConfig.severityWeights) as [InjurySeverity,number][]) {cumulative+=weight;if(roll<=cumulative){severity=candidate;break}}

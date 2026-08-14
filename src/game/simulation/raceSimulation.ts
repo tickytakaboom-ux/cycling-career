@@ -40,8 +40,8 @@ export function simulateRace(player:Rider,field:Rider[],race:Race,strategy:RaceS
   const resultBonus=Math.max(0,raceConfig.xp.resultMax-position/2);
   const xpGained=Math.round(raceConfig.xp.base+race.distance/raceConfig.xp.distanceDivisor+race.prestige/raceConfig.xp.prestigeDivisor+resultBonus);
   const reputationGained=position===1?race.prestige/raceConfig.reputationDivisors.win:position<=3?race.prestige/raceConfig.reputationDivisors.podium:position<=10?race.prestige/raceConfig.reputationDivisors.top10:.04;
-  const injury=rollInjury(player,race.date,{kind:'race',terrain:race.terrain,aggressive:strategy==='agressif'},random);
-  const risk=injuryRisk(player,{kind:'race',terrain:race.terrain,aggressive:strategy==='agressif'});
+  const injury=rollInjury(player,race.date,{kind:'race',terrain:race.terrain,strategy},random);
+  const risk=injuryRisk(player,{kind:'race',terrain:race.terrain,strategy});
   const dayEvent=playerScore.variance>2.5?'Une journée exceptionnelle vous a permis de dépasser les attentes.':playerScore.variance<-2.5?'Un jour sans vous a coûté plusieurs places.':'Votre performance correspond au niveau attendu aujourd’hui.';
   const events=[strategyEffect.summary,`Fatigue de course : +${fatigueCost}. Risque de blessure estimé : ${(risk*100).toFixed(1)} %.`,dayEvent];
   if(injury)events.push(`Blessure : ${injury.name} (${injury.daysRemaining} jours estimés).`);

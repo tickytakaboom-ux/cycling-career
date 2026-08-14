@@ -16,10 +16,10 @@ export const trainingConfig: Record<TrainingType,{label:string; fatigue:number; 
   technique:{label:'Pavés et technique',fatigue:14,form:-.55,stats:['pavement','descending','tactics'],specialization:1.1,light:false,description:'Pilotage, placement et adaptation aux pavés.'},
 };
 
-export const progressionConfig={baseGain:.075,ageFactors:[{max:20,value:1.15},{max:23,value:1.1},{max:26,value:1},{max:29,value:.9},{max:32,value:.75},{max:100,value:.55}],fatigueFactors:[{max:30,value:1},{max:60,value:.9},{max:80,value:.7},{max:90,value:.4},{max:100,value:.1}],minimumPotentialFactor:.015,experienceFactorMax:.08};
+export const progressionConfig={baseGain:.19,ageFactors:[{max:20,value:1.15},{max:23,value:1.1},{max:26,value:1},{max:29,value:.9},{max:32,value:.75},{max:100,value:.55}],fatigueFactors:[{max:30,value:1},{max:60,value:.9},{max:80,value:.7},{max:90,value:.4},{max:100,value:.1}],minimumPotentialFactor:.015,experienceFactorMax:.08};
 export const fatigueConfig={minimum:3,maximum:100,trainingLimit:98,chronicThreshold:75,chronicMoraleLoss:.45,raceBaseCost:10,distanceCostDivisor:45,difficultyCostDivisor:18};
 export const recoveryConfig={base:3,highFatigueBonus:7,recoveryStatDivisor:28,maximumDaily:15};
-export const formConfig={minimum:35,maximum:88,restGain:1.1,highFormThreshold:78,highFormDecay:.25,raceDifficultyLoss:2.8};
+export const formConfig={minimum:35,maximum:88,restGain:2,highFormThreshold:78,highFormDecay:.25,raceDifficultyLoss:2.8};
 export const moraleConfig={neutral:50,minimum:0,maximum:100,performanceRange:.06,minorProgressGain:.08,injuryLoss:{minor:1,moderate:4,serious:8,severe:14},resultChanges:{win:8,podium:5,top10:2,expected:.4,poor:-2.5}};
 export const raceConfig={formImpact:.1,fatigueMaxPenalty:.2,agePenaltyPerYear:1.05,experienceMaxBonus:2.8,experienceScale:1000,prestigeThreshold:35,randomStdDev:3.4,reputationDivisors:{win:16,podium:32,top10:90},xp:{base:8,distanceDivisor:35,prestigeDivisor:10,resultMax:12}};
 export const strategyConfig: Record<RaceStrategy,{performance:number; fatigueMultiplier:number; variance:number; injuryMultiplier:number; summary:string}> = {
@@ -27,6 +27,6 @@ export const strategyConfig: Record<RaceStrategy,{performance:number; fatigueMul
   normal:{performance:0,fatigueMultiplier:1,variance:1,injuryMultiplier:1,summary:'Plan équilibré : effort, risque et dépense énergétique modérés.'},
   agressif:{performance:1.7,fatigueMultiplier:1.35,variance:1.45,injuryMultiplier:1.25,summary:'Course offensive : potentiel supérieur, mais fatigue, variance et risque accrus.'},
 };
-export const injuryConfig={baseTrainingRisk:.001,baseRaceRisk:.007,fatigueMultipliers:[{max:40,value:1},{max:60,value:1.35},{max:75,value:1.9},{max:85,value:2.8},{max:100,value:4.2}],overloadMultiplier:1.6,lowFormMultiplier:1.25,terrainMultipliers:{sprint:1.15,plaine:1,vallons:1.1,montagne:1.15,chrono:.8,paves:1.65} as Record<Terrain,number>,severityWeights:{minor:.62,moderate:.25,serious:.1,severe:.03},durations:{minor:[1,3],moderate:[4,14],serious:[15,45],severe:[45,130]} as Record<InjurySeverity,[number,number]>,performancePenalties:{minor:.03,moderate:.08,serious:.16,severe:.25} as Record<InjurySeverity,number>};
+export const injuryConfig={baseTrainingRisk:.002,baseRaceRisk:.006,fatigueMultipliers:[{max:30,value:1},{max:50,value:1.4},{max:65,value:2.1},{max:75,value:3.2},{max:85,value:5},{max:92,value:8},{max:100,value:12}],overloadMultiplier:1.8,intensiveMultiplier:1.35,lowFormMultiplier:1.25,terrainMultipliers:{sprint:1.15,plaine:1,vallons:1.1,montagne:1.15,chrono:.8,paves:1.65} as Record<Terrain,number>,severityWeights:{minor:.62,moderate:.25,serious:.1,severe:.03},durations:{minor:[1,3],moderate:[4,14],serious:[15,45],severe:[45,130]} as Record<InjurySeverity,[number,number]>,performancePenalties:{minor:.03,moderate:.08,serious:.16,severe:.25} as Record<InjurySeverity,number>};
 
 export const clamp=(n:number,min=0,max=100)=>Math.max(min,Math.min(max,n));

@@ -16,10 +16,12 @@ export function createRider(input:NewRiderInput):Rider {
 
 const names=[['Milo','Verne'],['Nico','Aerts'],['Luca','Bellini'],['Oscar','Lind'],['Tomas','Kral'],['Sven','Meijer'],['Hugo','Costa'],['Jonas','Falk'],['Enzo','Martin'],['Adam','Nowak'],['Iker','Sola'],['Sam','Bennett'],['Louis','Fabre'],['Marek','Novak'],['Rui','Alves'],['Noah','Schmid'],['Axel','Jans'],['Theo','Mercier'],['Leo','Rossi'],['Felix','Bauer'],['Pablo','Vega'],['Finn','Eriksen'],['Max','Dumont'],['Elias','Voss'],['Robin','Willem'],['David','Kovac'],['Anton','Larsen'],['Mateo','Gil'],['Jan','Vos'],['Ben','Clarke']];
 const profiles:RiderProfile[]=['grimpeur','puncheur','sprinteur','rouleur','classiqueur','etapes'];
+const individualLevels=[.5,1,1.5,2,2.5,-1.5,-1,-.5,0,.5,1,1.5,2,2.5,3,-1,0,1,2,3,3,3.5,4,4.5,5,5.5,6,9,10,11];
+const profileKeys:Record<RiderProfile,(keyof RiderStats)[]>={grimpeur:['mountain','climbing','endurance'],puncheur:['climbing','explosiveness','tactics'],sprinteur:['sprint','explosiveness'],rouleur:['timeTrial','endurance','resistance'],classiqueur:['pavement','resistance','weather'],etapes:['mountain','climbing','timeTrial','endurance','recovery']};
 export const opponents=names.map((name,index)=>{
   const age=20+index%13;
   const rider=createRider({firstName:name[0],lastName:name[1],nationality:'Europe',height:174+index%12,weight:62+index%13,profile:profiles[index%6]});
-  const development=7+Math.min(age-20,8)*.9+(index%7);
-  Object.keys(rider.stats).forEach(key=>rider.stats[key as keyof RiderStats]=clamp(rider.stats[key as keyof RiderStats]+development,38,82));
+  const ageDevelopment=Math.min(5.6,(age-18)*.4),individualLevel=individualLevels[index],profileMaturity=(index%3);
+  Object.keys(rider.stats).forEach(key=>{const stat=key as keyof RiderStats;const maturity=profileKeys[rider.profile].includes(stat)?profileMaturity:0;rider.stats[stat]=clamp(rider.stats[stat]+ageDevelopment+individualLevel+maturity,32,82)});
   return {...rider,age,experience:(age-18)*180+(index%5)*90,reputation:18+index%24,form:58+index%18,fatigue:8+index%16,morale:45+index%41};
 });
