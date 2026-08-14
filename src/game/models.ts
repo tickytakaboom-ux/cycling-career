@@ -15,7 +15,7 @@ export interface Rider { id:string; firstName:string; lastName:string; nationali
 export type TeamLevel=1|2|3|4;
 export type TeamRole='Jeune espoir'|'Équipier'|'Coureur protégé'|'Leader';
 export type CareerLevel=1|2|3|4|5;
-export interface TeamMate { id:string; name:string; age:number; profile:RiderProfile; level:number; role:TeamRole }
+export interface TeamMate { id:string; name:string; age:number; profile:RiderProfile; stats:RiderStats; level:number; role:TeamRole }
 export interface Team { id:string; name:string; country:string; level:TeamLevel; prestige:number; budget:number; staffQuality:number; trainingQuality:number; medicalQuality:number; recoveryQuality:number; specialties:string[]; calendarSize:number; averageRiderLevel:number; color:string; roster:TeamMate[] }
 export interface Race { id:string; name:string; country:string; date:string; terrain:Terrain; distance:number; elevation:number; prestige:number; difficulty:number; competitionLevel?:TeamLevel; maxAltitude?:number; weather?:WeatherConditions }
 export interface CalendarRace extends Race { status:RaceStatus; result?:RaceResult }
