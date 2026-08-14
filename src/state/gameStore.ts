@@ -53,7 +53,6 @@ import {
   applyMoraleEvent,
   annualProgressionMoraleDelta,
   injuryMoraleDelta,
-  nextMoraleStreak,
   restMoraleDelta,
   resultMoraleReason,
 } from "../game/morale/moraleSystem";
@@ -469,24 +468,6 @@ function applyRaceMorale(
         category: "objective",
       });
   }
-  const oldStreak = game.career.moraleStreak ?? { top20: 0, poor: 0 },
-    { streak } = nextMoraleStreak(oldStreak, result.position, result.fieldSize);
-  if (streak.top20 === 3)
-    value = applyMoraleEvent(value, {
-      id: `streak-top20-${result.raceId}`,
-      date: game.currentDate,
-      delta: moraleConfig.streakBonus,
-      reason: "Série de 3 top 20",
-      category: "streak",
-    });
-  if (streak.poor === 3)
-    value = applyMoraleEvent(value, {
-      id: `streak-poor-${result.raceId}`,
-      date: game.currentDate,
-      delta: moraleConfig.streakPenalty,
-      reason: "Série de 3 résultats difficiles",
-      category: "streak",
-    });
   const finalObjectives = objectives.map((objective) =>
     seasonFinished && objective.status !== "completed"
       ? { ...objective, status: "failed" as const }
@@ -503,7 +484,7 @@ function applyRaceMorale(
           category: "objective",
         });
     }
-  return { rider: value, streak, objectives: finalObjectives };
+  return { rider: value, objectives: finalObjectives };
 }
 export function race(
   game: GameState,
@@ -577,7 +558,6 @@ export function race(
       objectiveBonuses: game.career.objectiveBonuses + claimed.bonus,
       level: careerLevel(afterRace.reputation, afterRace.experience),
       contract,
-      moraleStreak: moraleOutcome.streak,
     },
     next = {
       ...game,

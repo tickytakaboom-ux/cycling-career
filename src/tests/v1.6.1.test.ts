@@ -6,7 +6,6 @@ import {
   applyMoraleEvent,
   injuryMoraleDelta,
   moralePerformancePercent,
-  nextMoraleStreak,
   restMoraleDelta,
 } from "../game/morale/moraleSystem";
 import {
@@ -133,12 +132,13 @@ describe("journal central du moral", () => {
 
 describe("causes V1.6.1", () => {
   it.each([
-    [1, 31, 8],
-    [3, 31, 5],
-    [10, 31, 2],
-    [20, 31, 0.8],
-    [21, 31, 0.2],
-    [29, 31, -2.5],
+    [1, 31, 6],
+    [3, 31, 3],
+    [10, 31, 1],
+    [20, 31, 0.3],
+    [21, 31, 0],
+    [26, 31, 0],
+    [27, 31, -2],
   ])(
     "attribue la variation attendue à la place %i",
     (position, field, expected) =>
@@ -150,12 +150,7 @@ describe("causes V1.6.1", () => {
       restMoraleDelta(60),
       restMoraleDelta(74),
       restMoraleDelta(75),
-    ]).toEqual([0.5, 0.25, 0, -0.45]));
-  it("déclenche les séries uniquement au franchissement de trois", () => {
-    expect(nextMoraleStreak({ top20: 2, poor: 0 }, 12, 31).delta).toBe(1.5);
-    expect(nextMoraleStreak({ top20: 3, poor: 0 }, 12, 31).delta).toBe(0);
-    expect(nextMoraleStreak({ top20: 0, poor: 2 }, 31, 31).delta).toBe(-1.5);
-  });
+    ]).toEqual([0.15, 0.05, 0, -0.45]));
   it("conserve les blessures et paliers annuels validés", () => {
     expect(injuryMoraleDelta("minor")).toBe(-1);
     expect(injuryMoraleDelta("severe")).toBe(-14);
@@ -164,7 +159,7 @@ describe("causes V1.6.1", () => {
       annualProgressionMoraleDelta(1),
       annualProgressionMoraleDelta(0),
       annualProgressionMoraleDelta(-1),
-    ]).toEqual([2, 1, -0.5, -1.5]);
+    ]).toEqual([1.5, 0.5, 0, -1.5]);
   });
   it("conserve exactement le coefficient de performance 0,06", () => {
     expect(moraleConfig.performanceRange).toBe(0.06);
@@ -174,12 +169,12 @@ describe("causes V1.6.1", () => {
 });
 
 describe("intégration aux activités", () => {
-  it("ajoute +0,25 après chaque entraînement réussi", () => {
+  it("ajoute +0,05 après chaque entraînement réussi", () => {
     const game = createGame(rider());
     const trained = train(game, "endurance", () => 1);
-    expect(trained.rider.morale - game.rider.morale).toBeCloseTo(0.25);
+    expect(trained.rider.morale - game.rider.morale).toBeCloseTo(0.05);
     const second = train(trained, "endurance", () => 1);
-    expect(second.rider.morale - trained.rider.morale).toBeCloseTo(0.25);
+    expect(second.rider.morale - trained.rider.morale).toBeCloseTo(0.05);
   });
 
   it("applique les objectifs atteints et ratés sans duplication", () => {
@@ -211,7 +206,7 @@ describe("intégration aux activités", () => {
   });
   it("centralise le repos et empêche les anciennes fonctions de doubler le moral", () => {
     const game = createGame({ ...rider(), fatigue: 20, morale: 40 });
-    expect(nextDay(game).rider.morale).toBe(40.5);
+    expect(nextDay(game).rider.morale).toBe(40.15);
     expect(applyTraining(game.rider, "endurance").morale).toBe(40);
     expect(recoverDay(game.rider).morale).toBe(40);
     expect(

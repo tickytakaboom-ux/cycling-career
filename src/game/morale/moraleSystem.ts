@@ -1,5 +1,5 @@
 import { clamp, moraleConfig } from "../config";
-import type { MoraleCategory, MoraleStreak, Rider } from "../models";
+import type { MoraleCategory, Rider } from "../models";
 
 export interface MoraleEventInput {
   id: string;
@@ -38,27 +38,6 @@ export function restMoraleDelta(fatigue: number) {
   return -0.45;
 }
 
-export function nextMoraleStreak(
-  current: MoraleStreak,
-  position: number,
-  fieldSize: number,
-) {
-  const poor = position / fieldSize > 0.85;
-  const streak = {
-    top20: position <= 20 && !poor ? current.top20 + 1 : 0,
-    poor: poor ? current.poor + 1 : 0,
-  };
-  return {
-    streak,
-    delta:
-      streak.top20 === 3
-        ? moraleConfig.streakBonus
-        : streak.poor === 3
-          ? moraleConfig.streakPenalty
-          : 0,
-  };
-}
-
 export function injuryMoraleDelta(
   severity: keyof typeof moraleConfig.injuryLoss,
 ) {
@@ -66,10 +45,10 @@ export function injuryMoraleDelta(
 }
 
 export function annualProgressionMoraleDelta(ratingDelta: number) {
-  if (ratingDelta >= 2) return 2;
-  if (ratingDelta >= 1) return 1;
+  if (ratingDelta >= 2) return 1.5;
+  if (ratingDelta >= 1) return 0.5;
   if (ratingDelta <= -1) return -1.5;
-  return -0.5;
+  return 0;
 }
 
 export function moraleLabel(value: number) {

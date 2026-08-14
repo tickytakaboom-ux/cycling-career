@@ -20,7 +20,7 @@ export const progressionConfig={baseGain:.19,ageFactors:[{max:20,value:1.15},{ma
 export const fatigueConfig={minimum:3,maximum:100,trainingLimit:98,chronicThreshold:75,chronicMoraleLoss:.45,raceBaseCost:10,distanceCostDivisor:45,difficultyCostDivisor:18};
 export const recoveryConfig={base:3,highFatigueBonus:7,recoveryStatDivisor:28,maximumDaily:15};
 export const formConfig={minimum:35,maximum:88,restGain:2,highFormThreshold:78,highFormDecay:.25,raceDifficultyLoss:2.8};
-export const moraleConfig={neutral:50,minimum:0,maximum:100,performanceRange:.06,trainingGain:.25,restGain:{fresh:.5,moderate:.25},objectiveSuccess:3,objectiveFailure:-2,streakBonus:1.5,streakPenalty:-1.5,injuryLoss:{minor:1,moderate:4,serious:8,severe:14},resultChanges:{win:8,podium:5,top10:2,top20:.8,expected:.2,poor:-2.5}};
+export const moraleConfig={neutral:50,minimum:0,maximum:100,performanceRange:.06,trainingGain:.05,restGain:{fresh:.15,moderate:.05},objectiveSuccess:3,objectiveFailure:-2,injuryLoss:{minor:1,moderate:4,serious:8,severe:14},resultChanges:{win:6,podium:3,top10:1,top20:.3,expected:0,poor:-2}};
 export const raceConfig={formImpact:.1,fatigueMaxPenalty:.2,agePenaltyPerYear:1.05,experienceMaxBonus:2.8,experienceScale:1000,prestigeThreshold:35,randomStdDev:3.4,reputationDivisors:{win:16,podium:32,top10:90},xp:{base:8,distanceDivisor:35,prestigeDivisor:10,resultMax:12}};
 export const strategyConfig: Record<RaceStrategy,{performance:number; fatigueMultiplier:number; variance:number; injuryMultiplier:number; summary:string}> = {
   economiser:{performance:-1.1,fatigueMultiplier:.72,variance:.7,injuryMultiplier:.75,summary:'Effort maîtrisé : moins de fatigue et de risques, mais un potentiel de résultat réduit.'},
