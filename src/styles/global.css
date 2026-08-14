@@ -525,7 +525,7 @@ p {
 }
 .season-strip {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   background: #111412;
   border: 1px solid var(--line);
   margin-top: 18px;
@@ -1429,5 +1429,110 @@ p {
 @media (max-width: 760px) {
   .morale-summary {
     grid-template-columns: 1fr;
+  }
+}
+.interactive-back {
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: 32px 18px;
+}
+.interactive-race {
+  width: min(900px, 96vw);
+  max-height: none;
+}
+.interactive-header,
+.race-live-stats,
+.race-choices {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+.interactive-header > b {
+  color: var(--lime);
+}
+.race-track {
+  position: relative;
+  height: 88px;
+  margin: 28px 18px 18px;
+}
+.race-track-line {
+  position: absolute;
+  inset: 42px 0 auto;
+  height: 5px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #46505e, #8794a3);
+}
+.race-track > span {
+  position: absolute;
+  top: 35px;
+  width: 18px;
+  height: 18px;
+  translate: -50% 0;
+  border: 3px solid #6a7480;
+  border-radius: 50%;
+  background: var(--surface);
+}
+.race-track > span.passed,
+.race-track > span.current {
+  border-color: var(--lime);
+}
+.race-track > span.passed {
+  background: var(--lime);
+}
+.rider-dot {
+  position: absolute;
+  top: 4px;
+  translate: -50% 0;
+  padding: 5px 7px;
+  border-radius: 7px;
+  background: var(--lime);
+  color: #111;
+  font-size: 0.68rem;
+  font-weight: 900;
+  transition: left 0.35s ease;
+}
+.race-live-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 18px;
+}
+.race-live-stats > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.race-live-stats small {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+.race-moment {
+  padding: 20px;
+  border-left: 4px solid var(--lime);
+  background: rgba(201, 255, 61, 0.06);
+}
+.race-choices {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  margin-top: 16px;
+}
+.race-choices button {
+  display: grid;
+  gap: 6px;
+  padding: 15px;
+  text-align: left;
+}
+.race-choices small,
+.race-last-event {
+  color: var(--muted);
+}
+.race-finish-ready .big {
+  margin-top: 12px;
+}
+@media (max-width: 700px) {
+  .race-live-stats,
+  .race-choices {
+    grid-template-columns: 1fr 1fr;
   }
 }

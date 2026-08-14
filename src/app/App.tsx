@@ -26,6 +26,7 @@ import {
 import type {
   CalendarRace,
   GameState,
+  InteractiveRaceChoice,
   RaceStrategy,
   Rider,
   RiderStats,
@@ -40,11 +41,13 @@ import {
 } from "../game/world/rankings";
 import {
   createCareer,
+  beginInteractiveRace,
+  chooseInteractiveRaceAction,
   deleteSave,
+  finishInteractiveRace,
   loadGame,
   nextDay,
   prepareNextSeasonOffers,
-  race,
   saveGame,
   signContract,
   startNextSeason,
@@ -991,6 +994,140 @@ function WorldView({ game }: { game: GameState }) {
     </div>
   );
 }
+function InteractiveRaceModal({
+  game,
+  update,
+}: {
+  game: GameState;
+  update: (game: GameState) => void;
+}) {
+  const state = game.activeRace!;
+  const raceData = game.calendar.find((item) => item.id === state.raceId)!;
+  const current = state.phases[state.phaseIndex];
+  const progress = current ? (current.km / raceData.distance) * 100 : 100;
+  const choices: Array<[InteractiveRaceChoice, string, string]> = [
+    [
+      "attack",
+      "Attaquer",
+      "Gagner nettement des places, avec un coût énergétique élevé.",
+    ],
+    [
+      "follow",
+      "Suivre le mouvement",
+      "Limiter les risques avec un effort mesuré.",
+    ],
+    ["conserve", "Économiser", "Réduire la dépense, au risque de reculer."],
+    [
+      "teamwork",
+      "Aider un équipier",
+      "Miser sur le collectif et le placement.",
+    ],
+  ];
+  return (
+    <div className="modal-back interactive-back">
+      <div className="modal interactive-race">
+        <div className="interactive-header">
+          <div>
+            <span className="eyebrow">COURSE INTERACTIVE</span>
+            <h2>{raceData.name}</h2>
+          </div>
+          <b>
+            Km {current?.km ?? raceData.distance}/{raceData.distance}
+          </b>
+        </div>
+        <div className="race-track" aria-label="Progression de la course">
+          <div className="race-track-line" />
+          {state.phases.map((item, index) => (
+            <span
+              className={
+                index < state.phaseIndex
+                  ? "passed"
+                  : index === state.phaseIndex
+                    ? "current"
+                    : ""
+              }
+              key={item.id}
+              style={{ left: `${(item.km / raceData.distance) * 100}%` }}
+              title={item.title}
+            />
+          ))}
+          <div className="rider-dot" style={{ left: `${progress}%` }}>
+            JS
+          </div>
+        </div>
+        <div className="race-live-stats">
+          <div>
+            <small>POSITION</small>
+            <b>{state.position}e / 31</b>
+          </div>
+          <div>
+            <small>GROUPE</small>
+            <b>{state.group}</b>
+          </div>
+          <div>
+            <small>ÉCART</small>
+            <b>{state.gapSeconds ? `+${state.gapSeconds} s` : "—"}</b>
+          </div>
+          <div>
+            <small>EFFORT SUPPLÉMENTAIRE</small>
+            <b>+{state.fatigueDelta.toFixed(1)}</b>
+          </div>
+          <div>
+            <small>AVANTAGE DE COURSE</small>
+            <b>
+              {state.performanceDelta >= 0 ? "+" : ""}
+              {state.performanceDelta.toFixed(1)}
+            </b>
+          </div>
+        </div>
+        {current ? (
+          <>
+            <section className="race-moment">
+              <span className="eyebrow">
+                MOMENT CLÉ {state.phaseIndex + 1}/{state.phases.length}
+              </span>
+              <h2>{current.title}</h2>
+              <p>
+                {current.description} Julian est {state.position}e du{" "}
+                {state.group.toLowerCase()}.
+              </p>
+            </section>
+            <div className="race-choices">
+              {choices.map(([id, label, description]) => (
+                <button
+                  key={id}
+                  onClick={() => update(chooseInteractiveRaceAction(game, id))}
+                >
+                  <b>{label}</b>
+                  <small>{description}</small>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <section className="race-moment race-finish-ready">
+            <span className="eyebrow">ARRIVÉE EN VUE</span>
+            <h2>Les choix sont faits</h2>
+            <p>
+              Le moteur va maintenant calculer le classement final à partir de
+              l’état obtenu en course.
+            </p>
+            <button
+              className="primary big"
+              onClick={() => update(finishInteractiveRace(game))}
+            >
+              CALCULER LE RÉSULTAT <Flag />
+            </button>
+          </section>
+        )}
+        {state.log.length > 0 && (
+          <p className="race-last-event">{state.log.at(-1)?.text}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({
   game,
   setGame,
@@ -1011,7 +1148,7 @@ function Dashboard({
     },
     runRace = () => {
       if (racing) {
-        update(race(game, racing, strategy));
+        update(beginInteractiveRace(game, racing, strategy));
         setRacing(undefined);
       }
     };
@@ -1225,7 +1362,8 @@ function Dashboard({
         {tab === "world" && <WorldView game={game} />}{" "}
         {tab === "rider" && <RiderView rider={game.rider} />}
       </main>
-      {racing && (
+      {game.activeRace && <InteractiveRaceModal game={game} update={update} />}
+      {racing && !game.activeRace && (
         <div className="modal-back">
           <div className="modal">
             <span className="eyebrow">STRATÉGIE DE COURSE</span>

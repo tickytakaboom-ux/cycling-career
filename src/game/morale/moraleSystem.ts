@@ -9,12 +9,32 @@ export interface MoraleEventInput {
   category: MoraleCategory;
 }
 
+export function positiveMoraleMultiplier(morale: number) {
+  if (morale < 40) return 1.25;
+  if (morale < 60) return 1;
+  if (morale < 80) return 0.75;
+  if (morale < 90) return 0.5;
+  return 0.25;
+}
+
+export function effectiveMoraleDelta(
+  morale: number,
+  input: Pick<MoraleEventInput, "delta" | "category">,
+) {
+  if (input.delta <= 0) return input.delta;
+  const majorRaceResult = input.category === "race" && input.delta >= 1;
+  return majorRaceResult
+    ? input.delta
+    : input.delta * positiveMoraleMultiplier(morale);
+}
+
 export function applyMoraleEvent(rider: Rider, input: MoraleEventInput): Rider {
   const applied = rider.moraleAppliedEventIds ?? [];
   if (applied.includes(input.id)) return rider;
   const before = rider.morale;
+  const effectiveDelta = effectiveMoraleDelta(before, input);
   const after = clamp(
-    before + input.delta,
+    before + effectiveDelta,
     moraleConfig.minimum,
     moraleConfig.maximum,
   );

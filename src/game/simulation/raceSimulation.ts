@@ -107,8 +107,14 @@ export function simulateRace(
   race: Race,
   strategy: RaceStrategy = "normal",
   random: RandomSource = Math.random,
+  interactiveModifier = 0,
 ): RaceResult {
-  const playerScore = performance(player, race, strategy, random),
+  const calculatedPlayerScore = performance(player, race, strategy, random),
+    playerScore = {
+      ...calculatedPlayerScore,
+      interactive: interactiveModifier,
+      final: clamp(calculatedPlayerScore.final + interactiveModifier, 1, 100),
+    },
     scores = field.map(
       (rider) => performance(rider, race, "normal", random).final,
     );

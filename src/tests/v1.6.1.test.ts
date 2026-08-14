@@ -4,8 +4,10 @@ import { moraleConfig } from "../game/config";
 import {
   annualProgressionMoraleDelta,
   applyMoraleEvent,
+  effectiveMoraleDelta,
   injuryMoraleDelta,
   moralePerformancePercent,
+  positiveMoraleMultiplier,
   restMoraleDelta,
 } from "../game/morale/moraleSystem";
 import {
@@ -126,7 +128,26 @@ describe("journal central du moral", () => {
         category: "rest",
       },
     );
-    expect(value.morale).toBe(0.5);
+    expect(value.morale).toBe(0.625);
+  });
+
+  it("applique les cinq rendements décroissants aux gains positifs", () => {
+    expect([20, 50, 70, 85, 95].map(positiveMoraleMultiplier)).toEqual([
+      1.25, 1, 0.75, 0.5, 0.25,
+    ]);
+    expect(
+      effectiveMoraleDelta(95, { delta: 0.15, category: "rest" }),
+    ).toBeCloseTo(0.0375);
+  });
+
+  it("ne réduit ni les malus ni les grands résultats", () => {
+    expect(effectiveMoraleDelta(95, { delta: -2, category: "race" })).toBe(-2);
+    expect(effectiveMoraleDelta(95, { delta: 6, category: "race" })).toBe(6);
+    expect(effectiveMoraleDelta(95, { delta: 3, category: "race" })).toBe(3);
+    expect(effectiveMoraleDelta(95, { delta: 1, category: "race" })).toBe(1);
+    expect(
+      effectiveMoraleDelta(95, { delta: 0.3, category: "race" }),
+    ).toBeCloseTo(0.075);
   });
 });
 
@@ -172,9 +193,9 @@ describe("intégration aux activités", () => {
   it("ajoute +0,05 après chaque entraînement réussi", () => {
     const game = createGame(rider());
     const trained = train(game, "endurance", () => 1);
-    expect(trained.rider.morale - game.rider.morale).toBeCloseTo(0.05);
+    expect(trained.rider.morale - game.rider.morale).toBeCloseTo(0.0375);
     const second = train(trained, "endurance", () => 1);
-    expect(second.rider.morale - trained.rider.morale).toBeCloseTo(0.05);
+    expect(second.rider.morale - trained.rider.morale).toBeCloseTo(0.0375);
   });
 
   it("applique les objectifs atteints et ratés sans duplication", () => {

@@ -2,6 +2,7 @@ import type {
   CalendarRace,
   ContractObjective,
   GameState,
+  InteractiveRaceChoice,
   RaceResult,
   RaceStrategy,
   Rider,
@@ -42,6 +43,11 @@ import {
   trainingAllowed,
 } from "../game/progression/training";
 import { simulateRace } from "../game/simulation/raceSimulation";
+import {
+  resolveInteractivePhase,
+  seededRandom,
+  startInteractiveRace as createInteractiveRace,
+} from "../game/simulation/interactiveRace";
 import type { RandomSource } from "../game/simulation/random";
 import { generateWeather } from "../game/weather/weather";
 import {
@@ -491,6 +497,7 @@ export function race(
   raceId: string,
   strategy: RaceStrategy,
   random: RandomSource = Math.random,
+  interactiveModifier = 0,
 ): GameState {
   const target = game.calendar.find((item) => item.id === raceId);
   if (
@@ -505,7 +512,14 @@ export function race(
   const range = fieldRange(target.competitionLevel ?? game.team.level),
     field = generateOpponents((range.average[0] + range.average[1]) / 2),
     selected = target.selectedTeamMateIds ?? [],
-    result = simulateRace(game.rider, field, target, strategy, random),
+    result = simulateRace(
+      game.rider,
+      field,
+      target,
+      strategy,
+      random,
+      interactiveModifier,
+    ),
     teamResults = simulateTeamMates(
       game.team.roster,
       selected,
@@ -584,6 +598,80 @@ export function race(
         },
       }
     : next;
+}
+
+export function beginInteractiveRace(
+  game: GameState,
+  raceId: string,
+  strategy: RaceStrategy,
+): GameState {
+  const target = game.calendar.find((item) => item.id === raceId);
+  if (
+    !target ||
+    target.status !== "available" ||
+    target.date !== game.currentDate
+  )
+    return { ...game, notice: "Cette course ne peut être lancée aujourd’hui." };
+  if (game.activeRace?.raceId === raceId) return game;
+  return {
+    ...game,
+    activeRace: createInteractiveRace(
+      target,
+      game.rider,
+      strategy,
+      `${game.careerId}-${game.season.year}`,
+    ),
+    notice: `Départ de ${target.name}.`,
+  };
+}
+
+export function chooseInteractiveRaceAction(
+  game: GameState,
+  choice: InteractiveRaceChoice,
+): GameState {
+  if (!game.activeRace) return game;
+  return {
+    ...game,
+    activeRace: resolveInteractivePhase(game.activeRace, game.rider, choice),
+  };
+}
+
+export function finishInteractiveRace(game: GameState): GameState {
+  const active = game.activeRace;
+  if (!active || active.phaseIndex < active.phases.length) return game;
+  const prepared = {
+    ...game,
+    activeRace: undefined,
+    rider: {
+      ...game.rider,
+      fatigue: Math.min(100, game.rider.fatigue + active.fatigueDelta),
+    },
+  };
+  const finished = race(
+    prepared,
+    active.raceId,
+    active.strategy,
+    seededRandom(active.seed),
+    active.performanceDelta,
+  );
+  if (!finished.lastResult) return finished;
+  const result = {
+    ...finished.lastResult,
+    events: [
+      ...active.log.map(
+        (entry) =>
+          `Km ${entry.km} : ${entry.text} (${entry.positionBefore}e → ${entry.positionAfter}e)`,
+      ),
+      ...finished.lastResult.events,
+    ],
+  };
+  return {
+    ...finished,
+    lastResult: result,
+    calendar: finished.calendar.map((item) =>
+      item.id === active.raceId ? { ...item, result } : item,
+    ),
+  };
 }
 export function advanceToNextRace(game: GameState): GameState {
   if (game.calendar.some((race) => race.status === "available"))
