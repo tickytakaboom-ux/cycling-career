@@ -1,37 +1,1043 @@
-import {useEffect,useState} from 'react';
-import {Activity,Bike,Building2,CalendarDays,Flag,Gauge,Medal,Save,Trash2,Trophy,UserRound} from 'lucide-react';
-import {CreateCareer} from '../components/CreateCareer';
-import {teamById} from '../data/careerTeams';
-import {trainingConfig} from '../game/config';
-import {seasonSummary} from '../game/career/careerProgression';
-import {overallRating} from '../game/career/riderRating';
-import {injuryRisk} from '../game/injuries/injurySystem';
-import type {CalendarRace,GameState,RaceStrategy,Rider,RiderStats,TrainingType} from '../game/models';
-import {restPreview,trainingPreview} from '../game/progression/previews';
-import {rainLabels,weatherEffect,windLabels} from '../game/weather/weather';
-import {createCareer,deleteSave,loadGame,nextDay,prepareNextSeasonOffers,race,saveGame,signContract,startNextSeason,train,trainingBlockReason} from '../state/gameStore';
+import { useEffect, useState } from "react";
+import {
+  Activity,
+  Bike,
+  Building2,
+  CalendarDays,
+  Flag,
+  Gauge,
+  Medal,
+  Save,
+  Trash2,
+  Trophy,
+  UserRound,
+} from "lucide-react";
+import { CreateCareer } from "../components/CreateCareer";
+import { teamById } from "../data/careerTeams";
+import { trainingConfig } from "../game/config";
+import { seasonSummary } from "../game/career/careerProgression";
+import { overallRating } from "../game/career/riderRating";
+import { injuryRisk } from "../game/injuries/injurySystem";
+import type {
+  CalendarRace,
+  GameState,
+  RaceStrategy,
+  Rider,
+  RiderStats,
+  TrainingType,
+} from "../game/models";
+import { restPreview, trainingPreview } from "../game/progression/previews";
+import { rainLabels, weatherEffect, windLabels } from "../game/weather/weather";
+import {
+  createCareer,
+  deleteSave,
+  loadGame,
+  nextDay,
+  prepareNextSeasonOffers,
+  race,
+  saveGame,
+  signContract,
+  startNextSeason,
+  train,
+  trainingBlockReason,
+  unlockScouting,
+} from "../state/gameStore";
 
-type Tab='dashboard'|'training'|'races'|'calendar'|'team'|'rider';
-const profileLabels={grimpeur:'Grimpeur',puncheur:'Puncheur',sprinteur:'Sprinteur',rouleur:'Rouleur',baroudeur:'Baroudeur',classiqueur:'Baroudeur',etapes:'Rouleur'};
-const terrainLabels={sprint:'Sprint',plaine:'Plaine',vallons:'Vallons',montagne:'Montagne',chrono:'Chrono',paves:'Pavés'};
-const careerLabels=['','Débutant','Espoir','Coureur confirmé','Leader','Élite'];
-const statLabels:Record<keyof RiderStats,string>={mountain:'Montagne',sprint:'Sprint',climbing:'Côtes',timeTrial:'Chrono',pavement:'Pavés',endurance:'Endurance',explosiveness:'Explosivité',recovery:'Récupération',descending:'Descente',tactics:'Tactique',resistance:'Résistance',weather:'Météo'};
-const statHelp:Record<keyof RiderStats,string>={mountain:'Ascensions longues.',sprint:'Vitesse sur les arrivées rapides.',climbing:'Bosses et changements de pente.',timeTrial:'Effort régulier en solitaire.',pavement:'Rendement sur les pavés.',endurance:'Maintien d’un effort long.',explosiveness:'Accélérations.',recovery:'Récupération entre les efforts.',descending:'Pilotage en descente.',tactics:'Lecture de course.',resistance:'Tolérance aux efforts répétés.',weather:'Adaptation aux conditions.'};
-const trainingDetails:Record<Exclude<TrainingType,'recuperation'>,{icon:string;intensity:string;duration:string}>={endurance:{icon:'🚴',intensity:'Modérée',duration:'2h15'},montagne:{icon:'🏔️',intensity:'Élevée',duration:'2h45'},sprint:{icon:'⚡',intensity:'Élevée',duration:'1h45'},explosivite:{icon:'🔥',intensity:'Très élevée',duration:'1h30'},chrono:{icon:'⏱️',intensity:'Élevée',duration:'2h00'},technique:{icon:'🪨',intensity:'Élevée',duration:'2h10'}};
+type Tab = "dashboard" | "training" | "races" | "calendar" | "team" | "rider";
+const profileLabels = {
+  grimpeur: "Grimpeur",
+  puncheur: "Puncheur",
+  sprinteur: "Sprinteur",
+  rouleur: "Rouleur",
+  baroudeur: "Baroudeur",
+  classiqueur: "Baroudeur",
+  etapes: "Rouleur",
+};
+const terrainLabels = {
+  sprint: "Sprint",
+  plaine: "Plaine",
+  vallons: "Vallons",
+  montagne: "Montagne",
+  chrono: "Chrono",
+  paves: "Pavés",
+};
+const careerLabels = [
+  "",
+  "Débutant",
+  "Espoir",
+  "Coureur confirmé",
+  "Leader",
+  "Élite",
+];
+const statLabels: Record<keyof RiderStats, string> = {
+  mountain: "Montagne",
+  sprint: "Sprint",
+  climbing: "Côtes",
+  timeTrial: "Chrono",
+  pavement: "Pavés",
+  endurance: "Endurance",
+  explosiveness: "Explosivité",
+  recovery: "Récupération",
+  descending: "Descente",
+  tactics: "Tactique",
+  resistance: "Résistance",
+  weather: "Météo",
+};
+const statHelp: Record<keyof RiderStats, string> = {
+  mountain: "Ascensions longues.",
+  sprint: "Vitesse sur les arrivées rapides.",
+  climbing: "Bosses et changements de pente.",
+  timeTrial: "Effort régulier en solitaire.",
+  pavement: "Rendement sur les pavés.",
+  endurance: "Maintien d’un effort long.",
+  explosiveness: "Accélérations.",
+  recovery: "Récupération entre les efforts.",
+  descending: "Pilotage en descente.",
+  tactics: "Lecture de course.",
+  resistance: "Tolérance aux efforts répétés.",
+  weather: "Adaptation aux conditions.",
+};
+const trainingDetails: Record<
+  Exclude<TrainingType, "recuperation">,
+  { icon: string; intensity: string; duration: string }
+> = {
+  endurance: { icon: "🚴", intensity: "Modérée", duration: "2h15" },
+  montagne: { icon: "🏔️", intensity: "Élevée", duration: "2h45" },
+  sprint: { icon: "⚡", intensity: "Élevée", duration: "1h45" },
+  explosivite: { icon: "🔥", intensity: "Très élevée", duration: "1h30" },
+  chrono: { icon: "⏱️", intensity: "Élevée", duration: "2h00" },
+  technique: { icon: "🪨", intensity: "Élevée", duration: "2h10" },
+};
 
-function Metric({label,value,tone,help}:{label:string;value:number;tone?:string;help?:string}){return <div className="metric" title={help}><div><span>{label}</span><strong>{Math.round(value)}</strong></div><div className="meter"><i style={{width:`${value}%`,background:tone}}/></div>{help&&<small>{help}</small>}</div>}
-function InjuryCard({rider}:{rider:Rider}){if(!rider.injury)return null;return <section className="injury-card"><b>🩹 {rider.injury.name}</b><span>{rider.injury.severity} · {rider.injury.daysRemaining} jour(s)</span><span>{rider.injury.trainingRestriction==='light-only'?'Entraînement léger uniquement':'Entraînement interdit'}</span><span>Performance : −{Math.round(rider.injury.performancePenalty*100)} %</span></section>}
-function WeatherCard({race,rider}:{race:CalendarRace;rider:Rider}){const effect=weatherEffect(rider,race),w=effect.conditions;return <section className="weather-card"><b>Conditions de course</b><span>🌡️ {w.temperature} °C</span><span>💨 {w.windSpeed} km/h · {windLabels[w.windDirection]}</span><span>🌧️ Pluie {rainLabels[w.rain]}</span><span>☁️ {w.cloudCover} % · humidité {w.humidity} %</span><small>{effect.reasons.join(' ')}</small></section>}
-function RaceProfile({race}:{race:CalendarRace}){const points=race.terrain==='montagne'?'0,70 70,55 120,65 190,20 250,60 320,8 380,52 440,18 500,45':race.terrain==='vallons'?'0,65 80,42 150,62 220,30 300,58 370,26 440,52 500,40':'0,58 100,54 200,60 300,52 400,57 500,50';return <div className={`profile-visual ${race.terrain}`}><span>Départ</span><svg viewBox="0 0 500 80" preserveAspectRatio="none"><polyline points={points}/></svg><span>Arrivée</span></div>}
-function RaceSheet({race,rider,onStart}:{race:CalendarRace;rider:Rider;onStart?:(id:string)=>void}){return <div className="race-sheet"><section className="panel race-hero"><div><span className="eyebrow">{race.country} · {terrainLabels[race.terrain]}</span><h1>{race.name}</h1><p>{new Date(race.date+'T12:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})}</p></div><div className="race-facts"><b>{race.distance}<small>KM</small></b><b>{race.elevation}<small>M D+</small></b><b>{race.difficulty}<small>DIFFICULTÉ</small></b><b>{race.prestige}<small>PRESTIGE</small></b><b>{race.competitionLevel??1}<small>NIVEAU</small></b><b>31<small>COUREURS</small></b></div><RaceProfile race={race}/></section><WeatherCard race={race} rider={rider}/>{onStart&&race.status==='available'&&<button className="primary big" onClick={()=>onStart(race.id)}>CHOISIR LA STRATÉGIE <Flag/></button>}</div>}
+function Metric({
+  label,
+  value,
+  tone,
+  help,
+}: {
+  label: string;
+  value: number;
+  tone?: string;
+  help?: string;
+}) {
+  return (
+    <div className="metric" title={help}>
+      <div>
+        <span>{label}</span>
+        <strong>{Math.round(value)}</strong>
+      </div>
+      <div className="meter">
+        <i style={{ width: `${value}%`, background: tone }} />
+      </div>
+      {help && <small>{help}</small>}
+    </div>
+  );
+}
+function InjuryCard({ rider }: { rider: Rider }) {
+  if (!rider.injury) return null;
+  return (
+    <section className="injury-card">
+      <b>🩹 {rider.injury.name}</b>
+      <span>
+        {rider.injury.severity} · {rider.injury.daysRemaining} jour(s)
+      </span>
+      <span>
+        {rider.injury.trainingRestriction === "light-only"
+          ? "Entraînement léger uniquement"
+          : "Entraînement interdit"}
+      </span>
+      <span>
+        Performance : −{Math.round(rider.injury.performancePenalty * 100)} %
+      </span>
+    </section>
+  );
+}
+function WeatherCard({ race, rider }: { race: CalendarRace; rider: Rider }) {
+  const effect = weatherEffect(rider, race),
+    w = effect.conditions;
+  return (
+    <section className="weather-card">
+      <b>Conditions de course</b>
+      <span>🌡️ {w.temperature} °C</span>
+      <span>
+        💨 {w.windSpeed} km/h · {windLabels[w.windDirection]}
+      </span>
+      <span>🌧️ Pluie {rainLabels[w.rain]}</span>
+      <span>
+        ☁️ {w.cloudCover} % · humidité {w.humidity} %
+      </span>
+      <small>{effect.reasons.join(" ")}</small>
+    </section>
+  );
+}
+function RaceProfile({ race }: { race: CalendarRace }) {
+  const points =
+    race.terrain === "montagne"
+      ? "0,70 70,55 120,65 190,20 250,60 320,8 380,52 440,18 500,45"
+      : race.terrain === "vallons"
+        ? "0,65 80,42 150,62 220,30 300,58 370,26 440,52 500,40"
+        : "0,58 100,54 200,60 300,52 400,57 500,50";
+  return (
+    <div className={`profile-visual ${race.terrain}`}>
+      <span>Départ</span>
+      <svg viewBox="0 0 500 80" preserveAspectRatio="none">
+        <polyline points={points} />
+      </svg>
+      <span>Arrivée</span>
+    </div>
+  );
+}
+function RaceSheet({
+  race,
+  rider,
+  onStart,
+}: {
+  race: CalendarRace;
+  rider: Rider;
+  onStart?: (id: string) => void;
+}) {
+  return (
+    <div className="race-sheet">
+      <section className="panel race-hero">
+        <div>
+          <span className="eyebrow">
+            {race.country} · {terrainLabels[race.terrain]}
+          </span>
+          <h1>{race.name}</h1>
+          <p>
+            {new Date(race.date + "T12:00").toLocaleDateString("fr-FR", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
+          </p>
+        </div>
+        <div className="race-facts">
+          <b>
+            {race.distance}
+            <small>KM</small>
+          </b>
+          <b>
+            {race.elevation}
+            <small>M D+</small>
+          </b>
+          <b>
+            {race.difficulty}
+            <small>DIFFICULTÉ</small>
+          </b>
+          <b>
+            {race.prestige}
+            <small>PRESTIGE</small>
+          </b>
+          <b>
+            {race.competitionLevel ?? 1}
+            <small>NIVEAU</small>
+          </b>
+          <b>
+            31<small>COUREURS</small>
+          </b>
+        </div>
+        <RaceProfile race={race} />
+      </section>
+      <WeatherCard race={race} rider={rider} />
+      {onStart && race.status === "available" && (
+        <button className="primary big" onClick={() => onStart(race.id)}>
+          CHOISIR LA STRATÉGIE <Flag />
+        </button>
+      )}
+    </div>
+  );
+}
 
-function Offers({game,update,nextSeason=false}:{game:GameState;update:(g:GameState)=>void;nextSeason?:boolean}){return <main className="offers-screen"><div className="brand"><Bike/><span>CYCLING / CAREER</span></div><section className="page-intro"><span className="eyebrow">{nextSeason?'NOUVELLE SAISON':'PREMIER CONTRAT'}</span><h1>Choisissez votre projet</h1><p>Le prestige n’est pas tout : comparez le calendrier, le niveau sportif et la qualité de développement.</p></section><div className="offer-grid">{game.career.offers.map(offer=>{const team=teamById(offer.teamId)!;return <article className="panel offer-card" key={offer.id} style={{borderTopColor:team.color}}><span className="eyebrow">NIVEAU {'★'.repeat(team.level)}</span><h2>{team.name}</h2><p>{team.country} · Prestige {team.prestige}</p><div className="contract-facts"><span>Salaire <b>{offer.contract.monthlySalary} €/mois</b></span><span>Durée <b>1 saison</b></span><span>Rôle <b>{offer.contract.role}</b></span><span>Développement <b>{offer.contract.developmentRating}</b></span><span>Adversaires <b>{offer.contract.opponentDescription}</b></span><span>Calendrier <b>{offer.contract.calendarDescription}</b></span></div><p><strong>Spécialités :</strong> {team.specialties.join(', ')}</p><h3>Objectifs</h3>{offer.contract.objectives.map(goal=><small className="goal-line" key={goal.id}>○ {goal.label}</small>)}<button className="primary big" onClick={()=>update(nextSeason?startNextSeason(game,offer.id):signContract(game,offer.id))}>SIGNER AVEC CETTE ÉQUIPE</button></article>})}</div></main>}
+function Offers({
+  game,
+  update,
+  nextSeason = false,
+}: {
+  game: GameState;
+  update: (g: GameState) => void;
+  nextSeason?: boolean;
+}) {
+  return (
+    <main className="offers-screen">
+      <div className="brand">
+        <Bike />
+        <span>CYCLING / CAREER</span>
+      </div>
+      <section className="page-intro">
+        <span className="eyebrow">
+          {nextSeason ? "NOUVELLE SAISON" : "PREMIER CONTRAT"}
+        </span>
+        <h1>Choisissez votre projet</h1>
+        <p>
+          Le prestige n’est pas tout : comparez le calendrier, le niveau sportif
+          et la qualité de développement.
+        </p>
+      </section>
+      <div className="offer-grid">
+        {game.career.offers.map((offer) => {
+          const team = teamById(offer.teamId)!;
+          return (
+            <article
+              className="panel offer-card"
+              key={offer.id}
+              style={{ borderTopColor: team.color }}
+            >
+              <span className="eyebrow">NIVEAU {"★".repeat(team.level)}</span>
+              <h2>{team.name}</h2>
+              <p>
+                {team.country} · Prestige {team.prestige}
+              </p>
+              <div className="contract-facts">
+                <span>
+                  Salaire <b>{offer.contract.monthlySalary} €/mois</b>
+                </span>
+                <span>
+                  Durée <b>1 saison</b>
+                </span>
+                <span>
+                  Rôle <b>{offer.contract.role}</b>
+                </span>
+                <span>
+                  Développement <b>{offer.contract.developmentRating}</b>
+                </span>
+                <span>
+                  Adversaires <b>{offer.contract.opponentDescription}</b>
+                </span>
+                <span>
+                  Calendrier <b>{offer.contract.calendarDescription}</b>
+                </span>
+              </div>
+              <p>
+                <strong>Spécialités :</strong> {team.specialties.join(", ")}
+              </p>
+              <h3>Objectifs</h3>
+              {offer.contract.objectives.map((goal) => (
+                <small className="goal-line" key={goal.id}>
+                  ○ {goal.label}
+                </small>
+              ))}
+              <button
+                className="primary big"
+                onClick={() =>
+                  update(
+                    nextSeason
+                      ? startNextSeason(game, offer.id)
+                      : signContract(game, offer.id),
+                  )
+                }
+              >
+                SIGNER AVEC CETTE ÉQUIPE
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </main>
+  );
+}
 
-function TrainingPage({game,update}:{game:GameState;update:(g:GameState)=>void}){const types=(Object.keys(trainingConfig) as TrainingType[]).filter((t):t is Exclude<TrainingType,'recuperation'>=>t!=='recuperation'),selected=game.selectedTraining==='recuperation'?'endurance':game.selectedTraining,preview=trainingPreview(game.rider,selected,game.team.trainingQuality/65),block=trainingBlockReason(game,selected),rest=restPreview(game.rider);return <div className="training-page"><section className="page-intro"><span className="eyebrow">ACTIVITÉ DU JOUR</span><h1>Préparer le coureur</h1></section><div className="session-grid">{types.map(type=>{const d=trainingDetails[type],p=trainingPreview(game.rider,type,game.team.trainingQuality/65);return <button key={type} className={`session-card ${selected===type?'selected':''}`} onClick={()=>update({...game,selectedTraining:type})}><i>{d.icon}</i><b>{trainingConfig[type].label}</b><span>{d.intensity} · {d.duration}</span><small>Fatigue +{p.fatigueChange} · Risque {(p.risk*100).toFixed(1)} %</small></button>})}</div><div className="preview-grid"><section className="panel preview"><h2>{trainingDetails[selected].icon} {trainingConfig[selected].label}</h2><div className="estimate"><span>Fatigue <b>+{preview.fatigueChange.toFixed(0)}</b></span><span>Forme <b>{preview.formChange.toFixed(2)}</b></span><span>Risque <b>{(preview.risk*100).toFixed(1)} %</b></span>{preview.gains.map(g=><span key={g.stat}>{statLabels[g.stat]} <b>+{g.gain.toFixed(3)}</b></span>)}</div>{block&&<p className="warning">⚠ {block}</p>}<button className="primary big" disabled={Boolean(block)} onClick={()=>update(train(game,selected))}>VALIDER LA SÉANCE</button></section><section className="panel rest-preview"><h2>💤 Récupération</h2><div className="before-after"><span>Fatigue <b>{rest.fatigueBefore.toFixed(0)} → {rest.fatigueAfter.toFixed(0)}</b></span><span>Forme <b>{rest.formBefore.toFixed(0)} → {rest.formAfter.toFixed(0)}</b></span><span>Moral <b>{rest.moraleBefore.toFixed(0)} → {rest.moraleAfter.toFixed(0)}</b></span></div><button className="outline big" disabled={Boolean(game.calendar.find(r=>r.status==='available'))} onClick={()=>update(nextDay(game))}>PRENDRE DU REPOS</button></section></div></div>}
-function TeamView({game}:{game:GameState}){const contract=game.career.contract!;return <div className="content-view"><section className="panel team-hero" style={{borderTopColor:game.team.color}}><span className="eyebrow">ÉQUIPE NIVEAU {game.team.level}</span><h1>{game.team.name}</h1><p>{game.team.country} · Prestige {game.team.prestige} · Niveau moyen {game.team.averageRiderLevel}</p><div className="staff-grid"><span>Entraînement <b>{game.team.trainingQuality}</b></span><span>Médical <b>{game.team.medicalQuality}</b></span><span>Récupération <b>{game.team.recoveryQuality}</b></span><span>Budget <b>{game.team.budget.toLocaleString('fr-FR')} €</b></span></div></section><section className="panel"><h2>Votre contrat</h2><div className="contract-facts"><span>Rôle <b>{contract.role}</b></span><span>Niveau général <b>{overallRating(game.rider.stats,game.rider.profile)}</b></span><span>Salaire <b>{contract.monthlySalary} €/mois</b></span><span>Durée <b>{contract.durationYears} saison</b></span><span>Solde <b>{game.career.balance.toLocaleString('fr-FR')} €</b></span></div><h3>Objectifs</h3>{contract.objectives.map(goal=><div className="objective" key={goal.id}><span>{goal.status==='completed'?'✓':'○'} {goal.label}</span><b>{Math.min(goal.progress,goal.target).toFixed(goal.type==='reputation'?1:0)}/{goal.target}</b></div>)}</section><section className="panel"><h2>Effectif</h2><div className="roster">{game.team.roster.map(mate=><div key={mate.id}><b>{mate.name}</b><span>{mate.age} ans · {profileLabels[mate.profile]} · {mate.role}<small className="mate-stats">Mont. {mate.stats.mountain} · Côtes {mate.stats.climbing} · End. {mate.stats.endurance} · Sprint {mate.stats.sprint}</small></span><strong title="Niveau général pondéré selon le profil">{mate.level}</strong></div>)}</div></section></div>}
-function RiderView({rider}:{rider:Rider}){return <div className="content-view"><section className="panel profile-summary"><div className="rider-mark large">{rider.firstName[0]}{rider.lastName[0]}</div><div><span className="eyebrow">{profileLabels[rider.profile]} · {rider.nationality}</span><h1>{rider.firstName} {rider.lastName}</h1><p>{rider.height} cm · {rider.weight} kg · {rider.age} ans</p><p><b>Niveau général {overallRating(rider.stats,rider.profile)}</b> · indicateur pondéré selon le profil</p></div></section><InjuryCard rider={rider}/><section className="panel"><h3>Caractéristiques</h3><div className="stats-grid">{Object.entries(rider.stats).map(([key,value])=><Metric key={key} label={statLabels[key as keyof RiderStats]} value={value} help={statHelp[key as keyof RiderStats]}/>)}</div></section></div>}
-function CalendarView({game,onRace}:{game:GameState;onRace:(id:string)=>void}){return <div className="calendar-list">{game.calendar.map((item,index)=><article className={`calendar-card ${item.status}`} key={item.id}><div className="race-no">{String(index+1).padStart(2,'0')}</div><div className="race-date"><b>{new Date(item.date+'T12:00').getDate()}</b><span>{new Date(item.date+'T12:00').toLocaleDateString('fr-FR',{month:'short'})}</span></div><div className="race-name"><small>{item.country} · {terrainLabels[item.terrain]} · niveau {item.competitionLevel}</small><h3>{item.name}</h3><span>{item.distance} km · difficulté {item.difficulty} · prestige {item.prestige}</span></div><div className="race-state">{item.status==='completed'?<><Medal/><b>{item.result?.position}e</b></>:item.status==='available'?<button className="primary" onClick={()=>onRace(item.id)}>COURIR</button>:<span>À VENIR</span>}</div></article>)}</div>}
-function ResultToast({result,close}:{result:GameState['lastResult'];close:()=>void}){if(!result)return null;return <div className="result"><button onClick={close}>×</button><Trophy/><span>RÉSULTAT OFFICIEL</span><h2>{result.position}<sup>e</sup></h2><p>sur {result.fieldSize} coureurs · {result.gap}</p><div className="score"><b>{result.score}</b><small>PERFORMANCE / 100</small></div>{result.events.map(event=><p className="event" key={event}>{event}</p>)}<div className="result-gains"><strong>+ {result.xpGained} XP</strong><span>+ {result.reputationGained.toFixed(2)} réputation</span></div></div>}
+function TrainingPage({
+  game,
+  update,
+}: {
+  game: GameState;
+  update: (g: GameState) => void;
+}) {
+  const types = (Object.keys(trainingConfig) as TrainingType[]).filter(
+      (t): t is Exclude<TrainingType, "recuperation"> => t !== "recuperation",
+    ),
+    selected =
+      game.selectedTraining === "recuperation"
+        ? "endurance"
+        : game.selectedTraining,
+    preview = trainingPreview(
+      game.rider,
+      selected,
+      game.team.trainingQuality / 65,
+    ),
+    block = trainingBlockReason(game, selected),
+    rest = restPreview(game.rider);
+  return (
+    <div className="training-page">
+      <section className="page-intro">
+        <span className="eyebrow">ACTIVITÉ DU JOUR</span>
+        <h1>Préparer le coureur</h1>
+      </section>
+      <div className="session-grid">
+        {types.map((type) => {
+          const d = trainingDetails[type],
+            p = trainingPreview(
+              game.rider,
+              type,
+              game.team.trainingQuality / 65,
+            );
+          return (
+            <button
+              key={type}
+              className={`session-card ${selected === type ? "selected" : ""}`}
+              onClick={() => update({ ...game, selectedTraining: type })}
+            >
+              <i>{d.icon}</i>
+              <b>{trainingConfig[type].label}</b>
+              <span>
+                {d.intensity} · {d.duration}
+              </span>
+              <small>
+                Fatigue +{p.fatigueChange} · Risque {(p.risk * 100).toFixed(1)}{" "}
+                %
+              </small>
+            </button>
+          );
+        })}
+      </div>
+      <div className="preview-grid">
+        <section className="panel preview">
+          <h2>
+            {trainingDetails[selected].icon} {trainingConfig[selected].label}
+          </h2>
+          <div className="estimate">
+            <span>
+              Fatigue <b>+{preview.fatigueChange.toFixed(0)}</b>
+            </span>
+            <span>
+              Forme <b>{preview.formChange.toFixed(2)}</b>
+            </span>
+            <span>
+              Risque <b>{(preview.risk * 100).toFixed(1)} %</b>
+            </span>
+            {preview.gains.map((g) => (
+              <span key={g.stat}>
+                {statLabels[g.stat]} <b>+{g.gain.toFixed(3)}</b>
+              </span>
+            ))}
+          </div>
+          {block && <p className="warning">⚠ {block}</p>}
+          <button
+            className="primary big"
+            disabled={Boolean(block)}
+            onClick={() => update(train(game, selected))}
+          >
+            VALIDER LA SÉANCE
+          </button>
+        </section>
+        <section className="panel rest-preview">
+          <h2>💤 Récupération</h2>
+          <div className="before-after">
+            <span>
+              Fatigue{" "}
+              <b>
+                {rest.fatigueBefore.toFixed(0)} → {rest.fatigueAfter.toFixed(0)}
+              </b>
+            </span>
+            <span>
+              Forme{" "}
+              <b>
+                {rest.formBefore.toFixed(0)} → {rest.formAfter.toFixed(0)}
+              </b>
+            </span>
+            <span>
+              Moral{" "}
+              <b>
+                {rest.moraleBefore.toFixed(0)} → {rest.moraleAfter.toFixed(0)}
+              </b>
+            </span>
+          </div>
+          <button
+            className="outline big"
+            disabled={Boolean(
+              game.calendar.find((r) => r.status === "available"),
+            )}
+            onClick={() => update(nextDay(game))}
+          >
+            PRENDRE DU REPOS
+          </button>
+        </section>
+      </div>
+    </div>
+  );
+}
+function TeamView({
+  game,
+  update,
+}: {
+  game: GameState;
+  update: (value: GameState) => void;
+}) {
+  const contract = game.career.contract!,
+    results = game.calendar
+      .filter((race) => race.teamResults?.length)
+      .slice(-5)
+      .reverse(),
+    next = game.calendar.find((race) => race.status !== "completed");
+  return (
+    <div className="content-view">
+      <section
+        className="panel team-hero"
+        style={{ borderTopColor: game.team.color }}
+      >
+        <span className="eyebrow">ÉQUIPE NIVEAU {game.team.level}</span>
+        <h1>{game.team.name}</h1>
+        <p>
+          {game.team.country} · Prestige {game.team.prestige} · Niveau moyen{" "}
+          {game.team.averageRiderLevel}
+        </p>
+        <div className="staff-grid">
+          <span>
+            Entraînement <b>{game.team.trainingQuality}</b>
+          </span>
+          <span>
+            Médical <b>{game.team.medicalQuality}</b>
+          </span>
+          <span>
+            Récupération <b>{game.team.recoveryQuality}</b>
+          </span>
+          <span>
+            Budget <b>{game.team.budget.toLocaleString("fr-FR")} €</b>
+          </span>
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Votre contrat</h2>
+        <div className="contract-facts">
+          <span>
+            Rôle <b>{contract.role}</b>
+          </span>
+          <span>
+            Niveau général{" "}
+            <b>{overallRating(game.rider.stats, game.rider.profile)}</b>
+          </span>
+          <span>
+            Salaire <b>{contract.monthlySalary} €/mois</b>
+          </span>
+          <span>
+            Solde <b>{game.career.balance.toLocaleString("fr-FR")} €</b>
+          </span>
+          <span>
+            Primes <b>{game.career.objectiveBonuses} €</b>
+          </span>
+        </div>
+        <h3>Objectifs et primes</h3>
+        {contract.objectives.map((goal) => (
+          <div className="objective" key={goal.id}>
+            <span>
+              {goal.status === "completed" ? "✓" : "○"} {goal.label} ·{" "}
+              {goal.reward} €
+            </span>
+            <b>
+              {Math.min(goal.progress, goal.target).toFixed(
+                goal.type === "reputation" ? 1 : 0,
+              )}
+              /{goal.target}
+            </b>
+          </div>
+        ))}
+      </section>
+      <section className="panel">
+        <div className="panel-title">
+          <h2>Effectif</h2>
+          {!game.career.scoutingUnlocked && (
+            <button
+              className="outline"
+              onClick={() => update(unlockScouting(game))}
+            >
+              ANALYSE AVANCÉE · 300 €
+            </button>
+          )}
+        </div>
+        {next && (
+          <p className="selection-note">
+            Prochaine sélection :{" "}
+            {next.selectedTeamMateIds
+              ?.map(
+                (id) => game.team.roster.find((mate) => mate.id === id)?.name,
+              )
+              .filter(Boolean)
+              .join(", ")}
+          </p>
+        )}
+        <div className="roster">
+          {game.team.roster.map((mate) => (
+            <div key={mate.id}>
+              <b>{mate.name}</b>
+              <span>
+                {mate.age} ans · {profileLabels[mate.profile]} · {mate.role}
+                {game.career.scoutingUnlocked && (
+                  <small className="mate-stats">
+                    Mont. {mate.stats.mountain} · Côtes {mate.stats.climbing} ·
+                    End. {mate.stats.endurance} · Sprint {mate.stats.sprint} ·
+                    Forme {mate.form}
+                  </small>
+                )}
+              </span>
+              <strong>{mate.level}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Résultats de l’équipe</h2>
+        {results.length === 0 ? (
+          <p>Aucune course disputée.</p>
+        ) : (
+          results.map((race) => (
+            <div className="team-race-results" key={race.id}>
+              <b>{race.name}</b>
+              {race.teamResults!.map((result) => (
+                <span key={result.riderId}>
+                  {result.position}e · {result.riderName}{" "}
+                  <small>{result.score}/100</small>
+                </span>
+              ))}
+            </div>
+          ))
+        )}
+      </section>
+    </div>
+  );
+}
+function RiderView({ rider }: { rider: Rider }) {
+  return (
+    <div className="content-view">
+      <section className="panel profile-summary">
+        <div className="rider-mark large">
+          {rider.firstName[0]}
+          {rider.lastName[0]}
+        </div>
+        <div>
+          <span className="eyebrow">
+            {profileLabels[rider.profile]} · {rider.nationality}
+          </span>
+          <h1>
+            {rider.firstName} {rider.lastName}
+          </h1>
+          <p>
+            {rider.height} cm · {rider.weight} kg · {rider.age} ans
+          </p>
+          <p>
+            <b>Niveau général {overallRating(rider.stats, rider.profile)}</b> ·
+            indicateur pondéré selon le profil
+          </p>
+        </div>
+      </section>
+      <InjuryCard rider={rider} />
+      <section className="panel">
+        <h3>Caractéristiques</h3>
+        <div className="stats-grid">
+          {Object.entries(rider.stats).map(([key, value]) => (
+            <Metric
+              key={key}
+              label={statLabels[key as keyof RiderStats]}
+              value={value}
+              help={statHelp[key as keyof RiderStats]}
+            />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+function CalendarView({
+  game,
+  onRace,
+}: {
+  game: GameState;
+  onRace: (id: string) => void;
+}) {
+  return (
+    <div className="calendar-list">
+      {game.calendar.map((item, index) => (
+        <article className={`calendar-card ${item.status}`} key={item.id}>
+          <div className="race-no">{String(index + 1).padStart(2, "0")}</div>
+          <div className="race-date">
+            <b>{new Date(item.date + "T12:00").getDate()}</b>
+            <span>
+              {new Date(item.date + "T12:00").toLocaleDateString("fr-FR", {
+                month: "short",
+              })}
+            </span>
+          </div>
+          <div className="race-name">
+            <small>
+              {item.country} · {terrainLabels[item.terrain]} · niveau{" "}
+              {item.competitionLevel}
+            </small>
+            <h3>{item.name}</h3>
+            <span>
+              {item.distance} km · difficulté {item.difficulty} · prestige{" "}
+              {item.prestige}
+            </span>
+          </div>
+          <div className="race-state">
+            {item.status === "completed" ? (
+              <>
+                <Medal />
+                <b>{item.result?.position}e</b>
+              </>
+            ) : item.status === "available" ? (
+              <button className="primary" onClick={() => onRace(item.id)}>
+                COURIR
+              </button>
+            ) : (
+              <span>À VENIR</span>
+            )}
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+function ResultToast({
+  result,
+  close,
+}: {
+  result: GameState["lastResult"];
+  close: () => void;
+}) {
+  if (!result) return null;
+  return (
+    <div className="result">
+      <button onClick={close}>×</button>
+      <Trophy />
+      <span>RÉSULTAT OFFICIEL</span>
+      <h2>
+        {result.position}
+        <sup>e</sup>
+      </h2>
+      <p>
+        sur {result.fieldSize} coureurs · {result.gap}
+      </p>
+      <div className="score">
+        <b>{result.score}</b>
+        <small>PERFORMANCE / 100</small>
+      </div>
+      {result.events.map((event) => (
+        <p className="event" key={event}>
+          {event}
+        </p>
+      ))}
+      <div className="result-gains">
+        <strong>+ {result.xpGained} XP</strong>
+        <span>+ {result.reputationGained.toFixed(2)} réputation</span>
+      </div>
+    </div>
+  );
+}
 
-function Dashboard({game,setGame,onReset}:{game:GameState;setGame:(g:GameState)=>void;onReset:()=>void}){const [tab,setTab]=useState<Tab>('dashboard'),[racing,setRacing]=useState<string>(),[strategy,setStrategy]=useState<RaceStrategy>('normal');const available=game.calendar.find(r=>r.status==='available'),next=game.calendar.find(r=>r.status!=='completed'),update=(value:GameState)=>{setGame(value);saveGame(value)},runRace=()=>{if(racing){update(race(game,racing,strategy));setRacing(undefined)}};const summary=seasonSummary(game),contract=game.career.contract!;return <div className="shell"><aside><div className="logo"><Bike/><b>C/C</b></div><nav>{([['dashboard',Gauge,'Dashboard'],['training',Activity,'Entraînement'],['races',Flag,'Courses'],['calendar',CalendarDays,'Calendrier'],['team',Building2,'Équipe'],['rider',UserRound,'Coureur']] as const).map(([id,Icon,label])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon/><span>{label}</span></button>)}</nav><div className="aside-bottom"><button onClick={()=>saveGame(game)}><Save/><span>Sauvegarder</span></button><button onClick={onReset}><Trash2/><span>Nouvelle carrière</span></button></div></aside><main className="main"><header><div><span className="eyebrow">{new Date(game.currentDate+'T12:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}).toUpperCase()}</span><h2>{tab==='team'?'Mon équipe':tab==='rider'?'Mon coureur':tab==='training'?'Entraînement':tab==='calendar'?'Calendrier':tab==='races'?'Courses':'Journée du coureur'}</h2></div></header>{tab==='dashboard'&&<><section className="hero-card"><div className="rider-mark">{game.rider.firstName[0]}{game.rider.lastName[0]}</div><div className="rider-title"><span>{game.team.name} · {contract.role}</span><h1>{game.rider.firstName}<br/><strong>{game.rider.lastName}</strong></h1><div className="chips"><i>{game.rider.age} ANS</i><i>{profileLabels[game.rider.profile].toUpperCase()}</i><i>{careerLabels[game.career.level].toUpperCase()}</i></div></div><div className="condition"><Metric label="FORME" value={game.rider.form}/><Metric label="FATIGUE" value={game.rider.fatigue} tone="#ff7657"/><Metric label="MORAL" value={game.rider.morale} tone="#6fa8ff"/></div></section><InjuryCard rider={game.rider}/>{game.season.status==='completed'?<section className="panel season-end"><span className="eyebrow">FIN DE SAISON</span><h1>{game.career.seasonEvaluation}</h1><div className="season-strip"><div><small>COURSES</small><b>{summary.races}</b></div><div><small>TOP 20</small><b>{summary.top20}</b></div><div><small>XP</small><b>{summary.xp}</b></div><div><small>OBJECTIFS</small><b>{summary.objectives}</b></div></div><button className="primary big" onClick={()=>update(prepareNextSeasonOffers(game))}>RECEVOIR LES OFFRES</button></section>:<section className={`today-card ${available?'race-day':''}`}><span className="eyebrow">AUJOURD’HUI</span><h2>{available?`🚴 ${available.name}`:'🏋️ Entraînement ou récupération'}</h2><p>{available?'La course du jour doit être disputée.':`Prochaine course : ${next?.name??'—'}`}</p><button className="primary" onClick={()=>setTab(available?'races':'training')}>{available?'VOIR LA COURSE':'CHOISIR L’ACTIVITÉ'}</button></section>}<section className="season-strip"><div><small>EXPÉRIENCE</small><b>{game.rider.experience} XP</b></div><div><small>RÉPUTATION</small><b>{game.rider.reputation.toFixed(1)}</b></div><div><small>SALAIRE</small><b>{contract.monthlySalary} €/mois</b></div><div><small>OBJECTIFS</small><b>{contract.objectives.filter(g=>g.status==='completed').length}/{contract.objectives.length}</b></div></section></>}{tab==='training'&&<TrainingPage game={game} update={update}/>} {tab==='races'&&(available?<RaceSheet race={available} rider={game.rider} onStart={setRacing}/>:next?<RaceSheet race={next} rider={game.rider}/>:<p>Saison terminée.</p>)} {tab==='calendar'&&<CalendarView game={game} onRace={id=>{setRacing(id);setTab('races')}}/>}{tab==='team'&&<TeamView game={game}/>} {tab==='rider'&&<RiderView rider={game.rider}/>}</main>{racing&&<div className="modal-back"><div className="modal"><span className="eyebrow">STRATÉGIE DE COURSE</span><h2>{game.calendar.find(item=>item.id===racing)?.name}</h2><div className="strategy">{([['economiser','Économiser','Fatigue et risque réduits, potentiel moindre'],['normal','Normal','Équilibre entre performance, fatigue et risque'],['agressif','Agressif','Potentiel, fatigue et risque accrus']] as const).map(item=><button className={strategy===item[0]?'selected':''} onClick={()=>setStrategy(item[0])} key={item[0]}><b>{item[1]}</b><small>{item[2]}</small><em>Risque : {(injuryRisk(game.rider,{kind:'race',terrain:game.calendar.find(r=>r.id===racing)!.terrain,strategy:item[0]})*100).toFixed(1)} %</em></button>)}</div><button className="primary big" onClick={runRace}>PRENDRE LE DÉPART <Flag/></button><button className="cancel" onClick={()=>setRacing(undefined)}>Annuler</button></div></div>}{game.lastResult&&<ResultToast result={game.lastResult} close={()=>update({...game,lastResult:undefined})}/>}</div>}
-export function App(){const [game,setGame]=useState<GameState|undefined>(()=>loadGame());useEffect(()=>{if(game)saveGame(game)},[game]);if(!game)return <CreateCareer onCreate={r=>setGame(createCareer(r))}/>;if(!game.career.contract)return <Offers game={game} update={setGame}/>;if(game.season.status==='completed'&&game.career.offers.length)return <Offers game={game} update={setGame} nextSeason/>;return <Dashboard game={game} setGame={setGame} onReset={()=>{if(confirm('Supprimer cette carrière et recommencer ?')){deleteSave();setGame(undefined)}}}/>}
+function Dashboard({
+  game,
+  setGame,
+  onReset,
+}: {
+  game: GameState;
+  setGame: (g: GameState) => void;
+  onReset: () => void;
+}) {
+  const [tab, setTab] = useState<Tab>("dashboard"),
+    [racing, setRacing] = useState<string>(),
+    [strategy, setStrategy] = useState<RaceStrategy>("normal");
+  const available = game.calendar.find((r) => r.status === "available"),
+    next = game.calendar.find((r) => r.status !== "completed"),
+    update = (value: GameState) => {
+      setGame(value);
+      saveGame(value);
+    },
+    runRace = () => {
+      if (racing) {
+        update(race(game, racing, strategy));
+        setRacing(undefined);
+      }
+    };
+  const summary = seasonSummary(game),
+    contract = game.career.contract!;
+  return (
+    <div className="shell">
+      <aside>
+        <div className="logo">
+          <Bike />
+          <b>C/C</b>
+        </div>
+        <nav>
+          {(
+            [
+              ["dashboard", Gauge, "Dashboard"],
+              ["training", Activity, "Entraînement"],
+              ["races", Flag, "Courses"],
+              ["calendar", CalendarDays, "Calendrier"],
+              ["team", Building2, "Équipe"],
+              ["rider", UserRound, "Coureur"],
+            ] as const
+          ).map(([id, Icon, label]) => (
+            <button
+              key={id}
+              className={tab === id ? "active" : ""}
+              onClick={() => setTab(id)}
+            >
+              <Icon />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="aside-bottom">
+          <button onClick={() => saveGame(game)}>
+            <Save />
+            <span>Sauvegarder</span>
+          </button>
+          <button onClick={onReset}>
+            <Trash2 />
+            <span>Nouvelle carrière</span>
+          </button>
+        </div>
+      </aside>
+      <main className="main">
+        <header>
+          <div>
+            <span className="eyebrow">
+              {new Date(game.currentDate + "T12:00")
+                .toLocaleDateString("fr-FR", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })
+                .toUpperCase()}
+            </span>
+            <h2>
+              {tab === "team"
+                ? "Mon équipe"
+                : tab === "rider"
+                  ? "Mon coureur"
+                  : tab === "training"
+                    ? "Entraînement"
+                    : tab === "calendar"
+                      ? "Calendrier"
+                      : tab === "races"
+                        ? "Courses"
+                        : "Journée du coureur"}
+            </h2>
+          </div>
+        </header>
+        {tab === "dashboard" && (
+          <>
+            <section className="hero-card">
+              <div className="rider-mark">
+                {game.rider.firstName[0]}
+                {game.rider.lastName[0]}
+              </div>
+              <div className="rider-title">
+                <span>
+                  {game.team.name} · {contract.role}
+                </span>
+                <h1>
+                  {game.rider.firstName}
+                  <br />
+                  <strong>{game.rider.lastName}</strong>
+                </h1>
+                <div className="chips">
+                  <i>{game.rider.age} ANS</i>
+                  <i>{profileLabels[game.rider.profile].toUpperCase()}</i>
+                  <i>{careerLabels[game.career.level].toUpperCase()}</i>
+                </div>
+              </div>
+              <div className="condition">
+                <Metric label="FORME" value={game.rider.form} />
+                <Metric
+                  label="FATIGUE"
+                  value={game.rider.fatigue}
+                  tone="#ff7657"
+                />
+                <Metric
+                  label="MORAL"
+                  value={game.rider.morale}
+                  tone="#6fa8ff"
+                />
+              </div>
+            </section>
+            <InjuryCard rider={game.rider} />
+            {game.season.status === "completed" ? (
+              <section className="panel season-end">
+                <span className="eyebrow">FIN DE SAISON</span>
+                <h1>{game.career.seasonEvaluation}</h1>
+                <div className="season-strip">
+                  <div>
+                    <small>COURSES</small>
+                    <b>{summary.races}</b>
+                  </div>
+                  <div>
+                    <small>TOP 20</small>
+                    <b>{summary.top20}</b>
+                  </div>
+                  <div>
+                    <small>XP</small>
+                    <b>{summary.xp}</b>
+                  </div>
+                  <div>
+                    <small>OBJECTIFS</small>
+                    <b>{summary.objectives}</b>
+                  </div>
+                </div>
+                <button
+                  className="primary big"
+                  onClick={() => update(prepareNextSeasonOffers(game))}
+                >
+                  RECEVOIR LES OFFRES
+                </button>
+              </section>
+            ) : (
+              <section className={`today-card ${available ? "race-day" : ""}`}>
+                <span className="eyebrow">AUJOURD’HUI</span>
+                <h2>
+                  {available
+                    ? `🚴 ${available.name}`
+                    : "🏋️ Entraînement ou récupération"}
+                </h2>
+                <p>
+                  {available
+                    ? "La course du jour doit être disputée."
+                    : `Prochaine course : ${next?.name ?? "—"}`}
+                </p>
+                <button
+                  className="primary"
+                  onClick={() => setTab(available ? "races" : "training")}
+                >
+                  {available ? "VOIR LA COURSE" : "CHOISIR L’ACTIVITÉ"}
+                </button>
+              </section>
+            )}
+            <section className="season-strip">
+              <div>
+                <small>EXPÉRIENCE</small>
+                <b>{game.rider.experience} XP</b>
+              </div>
+              <div>
+                <small>RÉPUTATION</small>
+                <b>{game.rider.reputation.toFixed(1)}</b>
+              </div>
+              <div>
+                <small>SALAIRE</small>
+                <b>{contract.monthlySalary} €/mois</b>
+              </div>
+              <div>
+                <small>OBJECTIFS</small>
+                <b>
+                  {
+                    contract.objectives.filter((g) => g.status === "completed")
+                      .length
+                  }
+                  /{contract.objectives.length}
+                </b>
+              </div>
+            </section>
+          </>
+        )}
+        {tab === "training" && <TrainingPage game={game} update={update} />}{" "}
+        {tab === "races" &&
+          (available ? (
+            <RaceSheet
+              race={available}
+              rider={game.rider}
+              onStart={setRacing}
+            />
+          ) : next ? (
+            <RaceSheet race={next} rider={game.rider} />
+          ) : (
+            <p>Saison terminée.</p>
+          ))}{" "}
+        {tab === "calendar" && (
+          <CalendarView
+            game={game}
+            onRace={(id) => {
+              setRacing(id);
+              setTab("races");
+            }}
+          />
+        )}
+        {tab === "team" && <TeamView game={game} update={update} />}{" "}
+        {tab === "rider" && <RiderView rider={game.rider} />}
+      </main>
+      {racing && (
+        <div className="modal-back">
+          <div className="modal">
+            <span className="eyebrow">STRATÉGIE DE COURSE</span>
+            <h2>{game.calendar.find((item) => item.id === racing)?.name}</h2>
+            <div className="strategy">
+              {(
+                [
+                  [
+                    "economiser",
+                    "Économiser",
+                    "Fatigue et risque réduits, potentiel moindre",
+                  ],
+                  [
+                    "normal",
+                    "Normal",
+                    "Équilibre entre performance, fatigue et risque",
+                  ],
+                  [
+                    "agressif",
+                    "Agressif",
+                    "Potentiel, fatigue et risque accrus",
+                  ],
+                ] as const
+              ).map((item) => (
+                <button
+                  className={strategy === item[0] ? "selected" : ""}
+                  onClick={() => setStrategy(item[0])}
+                  key={item[0]}
+                >
+                  <b>{item[1]}</b>
+                  <small>{item[2]}</small>
+                  <em>
+                    Risque :{" "}
+                    {(
+                      injuryRisk(game.rider, {
+                        kind: "race",
+                        terrain: game.calendar.find((r) => r.id === racing)!
+                          .terrain,
+                        strategy: item[0],
+                      }) * 100
+                    ).toFixed(1)}{" "}
+                    %
+                  </em>
+                </button>
+              ))}
+            </div>
+            <button className="primary big" onClick={runRace}>
+              PRENDRE LE DÉPART <Flag />
+            </button>
+            <button className="cancel" onClick={() => setRacing(undefined)}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+      {game.lastResult && (
+        <ResultToast
+          result={game.lastResult}
+          close={() => update({ ...game, lastResult: undefined })}
+        />
+      )}
+    </div>
+  );
+}
+export function App() {
+  const [game, setGame] = useState<GameState | undefined>(() => loadGame());
+  useEffect(() => {
+    if (game) saveGame(game);
+  }, [game]);
+  if (!game) return <CreateCareer onCreate={(r) => setGame(createCareer(r))} />;
+  if (!game.career.contract) return <Offers game={game} update={setGame} />;
+  if (game.season.status === "completed" && game.career.offers.length)
+    return <Offers game={game} update={setGame} nextSeason />;
+  return (
+    <Dashboard
+      game={game}
+      setGame={setGame}
+      onReset={() => {
+        if (confirm("Supprimer cette carrière et recommencer ?")) {
+          deleteSave();
+          setGame(undefined);
+        }
+      }}
+    />
+  );
+}

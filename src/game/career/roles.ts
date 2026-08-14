@@ -1,0 +1,2 @@
+import type {TeamRole} from '../models';
+export function evaluateRole(current:TeamRole,rating:number,teamAverage:number,age:number,top10:number,experience:number):TeamRole{const score=rating-teamAverage+Math.min(4,top10*.8)+Math.min(3,experience/700);if(current==='Leader'&&score>=4)return current;if(current==='Coureur protégé'&&score>=1)return current;if(score>=7&&top10>=2)return 'Leader';if(score>=3&&top10>=1)return 'Coureur protégé';if(age<=21&&score<2)return 'Jeune espoir';return 'Équipier'}
