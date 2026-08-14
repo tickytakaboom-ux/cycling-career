@@ -44,6 +44,7 @@ import {
 } from "../game/progression/training";
 import { simulateRace } from "../game/simulation/raceSimulation";
 import {
+  interactiveFinalModifier,
   resolveInteractivePhase,
   seededRandom,
   startInteractiveRace as createInteractiveRace,
@@ -498,6 +499,7 @@ export function race(
   strategy: RaceStrategy,
   random: RandomSource = Math.random,
   interactiveModifier = 0,
+  supportedMate?: { id: string; bonus: number },
 ): GameState {
   const target = game.calendar.find((item) => item.id === raceId);
   if (
@@ -520,13 +522,25 @@ export function race(
       random,
       interactiveModifier,
     ),
-    teamResults = simulateTeamMates(
+    simulatedTeamResults = simulateTeamMates(
       game.team.roster,
       selected,
       target,
       field,
       random,
       result.score,
+    ),
+    teamResults = simulatedTeamResults.map((teamResult) =>
+      supportedMate?.id === teamResult.riderId
+        ? {
+            ...teamResult,
+            score: +(teamResult.score + supportedMate.bonus).toFixed(1),
+            position: Math.max(
+              1,
+              teamResult.position - Math.round(supportedMate.bonus * 1.5),
+            ),
+          }
+        : teamResult,
     ),
     team = {
       ...game.team,
@@ -613,6 +627,10 @@ export function beginInteractiveRace(
   )
     return { ...game, notice: "Cette course ne peut être lancée aujourd’hui." };
   if (game.activeRace?.raceId === raceId) return game;
+  const selected = new Set(target.selectedTeamMateIds ?? []);
+  const teamMate = game.team.roster
+    .filter((mate) => selected.has(mate.id))
+    .sort((a, b) => b.level - a.level)[0];
   return {
     ...game,
     activeRace: createInteractiveRace(
@@ -620,6 +638,7 @@ export function beginInteractiveRace(
       game.rider,
       strategy,
       `${game.careerId}-${game.season.year}`,
+      teamMate,
     ),
     notice: `Départ de ${target.name}.`,
   };
@@ -652,16 +671,29 @@ export function finishInteractiveRace(game: GameState): GameState {
     active.raceId,
     active.strategy,
     seededRandom(active.seed),
-    active.performanceDelta,
+    interactiveFinalModifier(active),
+    active.teamMateId
+      ? { id: active.teamMateId, bonus: active.teamSupport }
+      : undefined,
   );
   if (!finished.lastResult) return finished;
   const result = {
     ...finished.lastResult,
     events: [
+      "Décisions",
+      ...active.log.map(
+        (entry) => `Km ${entry.km} — ${entry.text.split(" — ")[0]}`,
+      ),
+      "Conséquences",
       ...active.log.map(
         (entry) =>
-          `Km ${entry.km} : ${entry.text} (${entry.positionBefore}e → ${entry.positionAfter}e)`,
+          `Km ${entry.km} — ${entry.consequence} (${entry.positionBefore}e → ${entry.positionAfter}e)`,
       ),
+      ...(active.teamMateName && active.teamSupport > 0
+        ? [
+            `Travail collectif : ${active.teamMateName} reçoit un bonus de ${active.teamSupport.toFixed(1)}.`,
+          ]
+        : []),
       ...finished.lastResult.events,
     ],
   };

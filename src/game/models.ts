@@ -208,6 +208,15 @@ export interface InteractiveRacePhase {
   title: string;
   description: string;
   keyStat: keyof RiderStats;
+  intensity: number;
+  situation: "steady" | "acceleration" | "technical" | "team" | "final";
+}
+export interface InteractiveRaceGroup {
+  id: string;
+  label: string;
+  gapSeconds: number;
+  size: number;
+  kind: "breakaway" | "peloton" | "chase" | "dropped";
 }
 export interface InteractiveRaceLog {
   phaseId: string;
@@ -216,6 +225,8 @@ export interface InteractiveRaceLog {
   text: string;
   fatigueDelta: number;
   performanceDelta: number;
+  consequence: string;
+  teamImpact?: number;
   positionBefore: number;
   positionAfter: number;
 }
@@ -230,6 +241,11 @@ export interface InteractiveRaceState {
   gapSeconds: number;
   fatigueDelta: number;
   performanceDelta: number;
+  startPosition: number;
+  groups: InteractiveRaceGroup[];
+  teamMateId?: string;
+  teamMateName?: string;
+  teamSupport: number;
   choices: InteractiveRaceChoice[];
   log: InteractiveRaceLog[];
 }

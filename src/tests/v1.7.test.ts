@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createRider } from "../data/riders";
 import {
   createRacePhases,
+  interactiveFinalModifier,
+  interactiveTendency,
   resolveInteractivePhase,
   startInteractiveRace,
 } from "../game/simulation/interactiveRace";
@@ -57,6 +59,62 @@ describe("phases de course V1.7", () => {
     expect(attack.position).not.toBe(conserve.position);
     expect(attack.performanceDelta).not.toBe(conserve.performanceDelta);
     expect(attack.log).toHaveLength(1);
+    expect(attack.log[0].consequence).toContain("avantage");
+  });
+
+  it("tient compte du terrain, de la fatigue et de la situation", () => {
+    const race = {
+      ...createGame(rider()).calendar[0],
+      terrain: "montagne" as const,
+    };
+    const julian = rider();
+    const base = startInteractiveRace(race, julian, "normal", "context");
+    const mountain = {
+      ...base,
+      phases: base.phases.map((phase, index) =>
+        index === 0
+          ? {
+              ...phase,
+              keyStat: "mountain" as const,
+              id: "same-phase",
+              situation: "acceleration" as const,
+            }
+          : phase,
+      ),
+    };
+    const sprint = {
+      ...mountain,
+      phases: mountain.phases.map((phase, index) =>
+        index === 0 ? { ...phase, keyStat: "sprint" as const } : phase,
+      ),
+    };
+    const suitable = resolveInteractivePhase(mountain, julian, "attack");
+    const unsuitable = resolveInteractivePhase(
+      sprint,
+      { ...julian, fatigue: 80 },
+      "attack",
+    );
+    expect(suitable.position).toBeLessThan(unsuitable.position);
+    expect(suitable.performanceDelta).toBeGreaterThan(
+      unsuitable.performanceDelta,
+    );
+  });
+
+  it("fait évoluer les écarts progressivement et contextualise l'équipier", () => {
+    const game = createGame(rider());
+    const mate = game.team.roster[0];
+    const state = startInteractiveRace(
+      game.calendar[0],
+      game.rider,
+      "normal",
+      "groups",
+      mate,
+    );
+    const next = resolveInteractivePhase(state, game.rider, "teamwork");
+    expect(next.gapSeconds).not.toBe(state.gapSeconds);
+    expect(next.groups).not.toEqual(state.groups);
+    expect(next.teamMateName).toBe(mate.name);
+    expect(next.teamSupport).toBeGreaterThan(0);
   });
 });
 
@@ -91,9 +149,31 @@ describe("boucle interactive complète", () => {
     expect(game.lastResult!.breakdown.interactive).toBeDefined();
     expect(
       game.lastResult!.events.filter((event) => event.startsWith("Km ")),
-    ).toHaveLength(7);
+    ).toHaveLength(14);
+    expect(game.lastResult!.events).toContain("Décisions");
+    expect(game.lastResult!.events).toContain("Conséquences");
+    expect(game.lastResult!.breakdown.interactive).toBeDefined();
     expect(game.calendar[0].result?.events).toEqual(game.lastResult?.events);
     expect(game.currentDate).toBe("2027-02-09");
+  });
+
+  it("relie placement, avantage et tendance au résultat final", () => {
+    let game = advanceToNextRace(createGame(rider()));
+    game = beginInteractiveRace(game, game.calendar[0].id, "normal");
+    for (const choice of [
+      "attack",
+      "follow",
+      "attack",
+      "follow",
+      "attack",
+      "follow",
+      "attack",
+    ] as const)
+      game = chooseInteractiveRaceAction(game, choice);
+    const expected = interactiveFinalModifier(game.activeRace!);
+    expect(interactiveTendency(game.activeRace!).label).toBeTruthy();
+    const finished = finishInteractiveRace(game);
+    expect(finished.lastResult?.breakdown.interactive).toBeCloseTo(expected);
   });
 
   it("produit le même résultat depuis exactement le même état et les mêmes choix", () => {

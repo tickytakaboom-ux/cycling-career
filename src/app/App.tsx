@@ -34,6 +34,7 @@ import type {
 } from "../game/models";
 import { restPreview, trainingPreview } from "../game/progression/previews";
 import { rainLabels, weatherEffect, windLabels } from "../game/weather/weather";
+import { interactiveTendency } from "../game/simulation/interactiveRace";
 import {
   riderRankings,
   teamRankings,
@@ -850,7 +851,10 @@ function ResultToast({
         <small>PERFORMANCE / 100</small>
       </div>
       {result.events.map((event) => (
-        <p className="event" key={event}>
+        <p
+          className={`event ${event === "Décisions" || event === "Conséquences" ? "event-heading" : ""}`}
+          key={event}
+        >
           {event}
         </p>
       ))}
@@ -1005,22 +1009,30 @@ function InteractiveRaceModal({
   const raceData = game.calendar.find((item) => item.id === state.raceId)!;
   const current = state.phases[state.phaseIndex];
   const progress = current ? (current.km / raceData.distance) * 100 : 100;
-  const choices: Array<[InteractiveRaceChoice, string, string]> = [
+  const choices: Array<[InteractiveRaceChoice, string, string, string]> = [
     [
       "attack",
       "Attaquer",
       "Gagner nettement des places, avec un coût énergétique élevé.",
+      "Placement ↑↑ · Fatigue ↑↑ · Risque élevé",
     ],
     [
       "follow",
       "Suivre le mouvement",
       "Limiter les risques avec un effort mesuré.",
+      "Placement ↑ / = · Fatigue ↑ · Risque faible",
     ],
-    ["conserve", "Économiser", "Réduire la dépense, au risque de reculer."],
+    [
+      "conserve",
+      "Économiser",
+      "Réduire la dépense, au risque de reculer.",
+      "Placement = / ↓ · Fatigue ↓ · Risque moyen",
+    ],
     [
       "teamwork",
-      "Aider un équipier",
+      `Aider ${state.teamMateName ?? "un équipier"}`,
       "Miser sur le collectif et le placement.",
+      "Placement = / ↓ · Fatigue ↑ · Impact collectif ↑↑",
     ],
   ];
   return (
@@ -1034,6 +1046,30 @@ function InteractiveRaceModal({
           <b>
             Km {current?.km ?? raceData.distance}/{raceData.distance}
           </b>
+        </div>
+        <div className="race-groups" aria-label="Groupes en course">
+          {(state.groups ?? []).map((group) => (
+            <div
+              className={`race-group ${group.kind}`}
+              key={group.id}
+              style={{
+                left: `${Math.min(97, Math.max(3, progress + (state.gapSeconds - group.gapSeconds) / 2))}%`,
+              }}
+            >
+              <i />
+              <span>{group.label}</span>
+              <small>
+                {group.gapSeconds ? `+${group.gapSeconds} s` : "Tête"}
+              </small>
+            </div>
+          ))}
+          <div className="race-group player" style={{ left: `${progress}%` }}>
+            <i />
+            <span>Julian</span>
+            <small>
+              {state.gapSeconds ? `+${state.gapSeconds} s` : "Tête"}
+            </small>
+          </div>
         </div>
         <div className="race-track" aria-label="Progression de la course">
           <div className="race-track-line" />
@@ -1075,8 +1111,8 @@ function InteractiveRaceModal({
           <div>
             <small>AVANTAGE DE COURSE</small>
             <b>
-              {state.performanceDelta >= 0 ? "+" : ""}
-              {state.performanceDelta.toFixed(1)}
+              {(state.performanceDelta ?? 0) >= 0 ? "+" : ""}
+              {(state.performanceDelta ?? 0).toFixed(1)}
             </b>
           </div>
         </div>
@@ -1093,13 +1129,14 @@ function InteractiveRaceModal({
               </p>
             </section>
             <div className="race-choices">
-              {choices.map(([id, label, description]) => (
+              {choices.map(([id, label, description, indicators]) => (
                 <button
                   key={id}
                   onClick={() => update(chooseInteractiveRaceAction(game, id))}
                 >
                   <b>{label}</b>
                   <small>{description}</small>
+                  <em>{indicators}</em>
                 </button>
               ))}
             </div>
@@ -1112,6 +1149,17 @@ function InteractiveRaceModal({
               Le moteur va maintenant calculer le classement final à partir de
               l’état obtenu en course.
             </p>
+            {(() => {
+              const tendency = interactiveTendency(state);
+              return (
+                <div className="race-tendency">
+                  <b>
+                    {tendency.symbol} {tendency.label}
+                  </b>
+                  <span>{tendency.text}</span>
+                </div>
+              );
+            })()}
             <button
               className="primary big"
               onClick={() => update(finishInteractiveRace(game))}
@@ -1121,7 +1169,10 @@ function InteractiveRaceModal({
           </section>
         )}
         {state.log.length > 0 && (
-          <p className="race-last-event">{state.log.at(-1)?.text}</p>
+          <div className="race-last-event">
+            <b>{state.log.at(-1)?.text}</b>
+            <span>{state.log.at(-1)?.consequence}</span>
+          </div>
         )}
       </div>
     </div>
