@@ -466,6 +466,9 @@ export function startInteractiveRace(
     8,
     25,
   );
+  const teamMateSituation = teamMate
+    ? createTeamMateSituation(seed, race, teamMate, startPosition, 6)
+    : undefined;
   return {
     raceId: race.id,
     seed,
@@ -481,6 +484,7 @@ export function startInteractiveRace(
     groups: initialGroups(),
     teamMateId: teamMate?.id,
     teamMateName: teamMate?.name,
+    ...teamMateSituation,
     teamSupport: 0,
     choices: [],
     log: [],
@@ -531,6 +535,204 @@ const choiceLabels = {
   teamwork: "Aider l'équipe",
 } as const;
 
+const terrainProfileFit: Record<
+  Terrain,
+  Partial<Record<Rider["profile"], number>>
+> = {
+  montagne: { grimpeur: 8, puncheur: 3, baroudeur: 2 },
+  sprint: { sprinteur: 8, rouleur: 3 },
+  paves: { classiqueur: 8, rouleur: 4, baroudeur: 3 },
+  chrono: { rouleur: 8 },
+  plaine: { sprinteur: 7, rouleur: 5, classiqueur: 2 },
+  vallons: { puncheur: 8, classiqueur: 4, grimpeur: 2, baroudeur: 3 },
+};
+
+const terrainStat: Record<Terrain, keyof Rider["stats"]> = {
+  montagne: "mountain",
+  sprint: "sprint",
+  paves: "pavement",
+  chrono: "timeTrial",
+  plaine: "endurance",
+  vallons: "explosiveness",
+};
+
+export function selectInteractiveTeamMate(
+  race: Race,
+  roster: TeamMate[],
+  selectedIds: string[],
+) {
+  const selected = new Set(selectedIds);
+  const roleValue: Record<TeamMate["role"], number> = {
+    Leader: 8,
+    "Coureur protégé": 6,
+    Équipier: 2,
+    "Jeune espoir": 1,
+  };
+  const keyStat = terrainStat[race.terrain];
+  return roster
+    .filter((mate) => selected.has(mate.id))
+    .map((mate) => ({
+      mate,
+      score:
+        mate.level * 0.45 +
+        mate.stats[keyStat] * 0.25 +
+        mate.form * 0.12 +
+        (terrainProfileFit[race.terrain][mate.profile] ?? 0) +
+        roleValue[mate.role] +
+        (race.distance >= 160 ? mate.stats.endurance * 0.08 : 0),
+    }))
+    .sort((a, b) => b.score - a.score || a.mate.id.localeCompare(b.mate.id))[0]
+    ?.mate;
+}
+
+function groupForPosition(position: number) {
+  return position <= 7
+    ? "Groupe de tête"
+    : position <= 20
+      ? "Peloton principal"
+      : position <= 27
+        ? "Groupe poursuivant"
+        : "Groupe attardé";
+}
+
+function gapForPosition(position: number) {
+  return position <= 7
+    ? 0
+    : position <= 20
+      ? 5 + Math.max(0, position - 12) * 1.2
+      : position <= 27
+        ? 16 + (position - 20) * 3.2
+        : 48 + (position - 27) * 7;
+}
+
+function teamMateIsAccessible(
+  julianGroup: string,
+  julianGap: number,
+  mateGroup: string,
+  mateGap: number,
+) {
+  return julianGroup === mateGroup && Math.abs(julianGap - mateGap) <= 10;
+}
+
+function createTeamMateSituation(
+  seed: number,
+  race: Race,
+  mate: TeamMate,
+  julianPosition: number,
+  julianGap: number,
+) {
+  const roll = seededRandom(hash(`${seed}-${mate.id}-situation`))();
+  const suitability =
+    mate.level * 0.35 +
+    mate.stats[terrainStat[race.terrain]] * 0.35 +
+    mate.form * 0.2 +
+    (terrainProfileFit[race.terrain][mate.profile] ?? 0);
+  const teamMatePosition = clamp(
+    Math.round(31 - suitability / 4 + (roll - 0.5) * 8),
+    3,
+    30,
+  );
+  const teamMateGroup = groupForPosition(teamMatePosition);
+  const teamMateGapSeconds = Math.max(
+    0,
+    Math.round(gapForPosition(teamMatePosition) + (roll - 0.5) * 5),
+  );
+  return {
+    teamMatePosition,
+    teamMateGroup,
+    teamMateGapSeconds,
+    teamMateAccessible: teamMateIsAccessible(
+      groupForPosition(julianPosition),
+      julianGap,
+      teamMateGroup,
+      teamMateGapSeconds,
+    ),
+  };
+}
+
+export interface InteractiveChoiceDescription {
+  label: string;
+  description: string;
+  indicators: string;
+  disabled?: boolean;
+}
+
+export function interactiveChoiceDescriptions(
+  state: InteractiveRaceState,
+  rider: Rider,
+  race: Race,
+): Record<InteractiveRaceChoice, InteractiveChoiceDescription> {
+  const phase = state.phases[state.phaseIndex];
+  const fatigue = rider.fatigue + state.fatigueDelta;
+  const affinity = phase ? terrainAffinity(rider, phase) : 50;
+  const underPressure =
+    phase?.situation === "acceleration" || phase?.situation === "final";
+  const poorlyPlaced =
+    state.position > 20 || state.group.includes("poursuivant");
+  const tired = fatigue >= 65;
+  const favorable = affinity >= 65 || (state.performanceDelta ?? 0) >= 1.5;
+  const phaseContext =
+    phase?.situation === "technical"
+      ? "dans ce passage technique"
+      : phase?.situation === "team"
+        ? "dans cette phase collective"
+        : phase?.situation === "final"
+          ? "dans le final"
+          : underPressure
+            ? "face à l'accélération"
+            : "dans cette phase calme";
+  const attack = tired
+    ? `Attaque très risquée ${phaseContext} : les ressources de Julian sont limitées.`
+    : poorlyPlaced
+      ? `Une attaque peut combler des places, mais l'écart avec l'avant rend l'effort incertain.`
+      : favorable
+        ? `Le profil et la ${phase?.keyStat ?? terrainStat[race.terrain]} de Julian rendent l'initiative pertinente, sans garantie.`
+        : `Le terrain sollicite une qualité moins favorable à Julian : l'attaque reste risquée.`;
+  const follow = underPressure
+    ? poorlyPlaced
+      ? "Compromis pour limiter les pertes et rester au contact de son groupe."
+      : "Répondre au changement de rythme protège le placement, au prix d'un effort mesuré."
+    : tired
+      ? "Suivre permet de défendre la position, mais entame des réserves déjà réduites."
+      : "Rester dans les roues consolide le groupe sans prendre l'initiative.";
+  const conserve = poorlyPlaced
+    ? "Réduit l'effort, mais risque d'augmenter l'écart avec les groupes de devant."
+    : underPressure
+      ? "Préserve des ressources, avec un risque de perdre des places pendant l'accélération."
+      : "Profite de l'accalmie pour récupérer, au risque de céder un peu de terrain.";
+  const accessible = Boolean(
+    state.teamMateId && state.teamMateAccessible !== false,
+  );
+  const mateSituation = accessible
+    ? `${state.teamMateName} est accessible dans le ${state.teamMateGroup?.toLowerCase()}${state.teamMatePosition ? ` autour de la ${state.teamMatePosition}e place` : ""}.`
+    : "Impossible d’aider cet équipier depuis votre groupe";
+  return {
+    attack: {
+      label: "Attaquer",
+      description: attack,
+      indicators: "Placement ↑↑ · Fatigue ↑↑ · Risque élevé",
+    },
+    follow: {
+      label: "Suivre le mouvement",
+      description: follow,
+      indicators: "Placement ↑ / = · Fatigue ↑ · Risque modéré",
+    },
+    conserve: {
+      label: "Économiser",
+      description: conserve,
+      indicators: "Placement = / ↓ · Fatigue ↓ · Risque de perte d'écart",
+    },
+    teamwork: {
+      label: accessible ? `Aider ${state.teamMateName}` : "Aider un équipier",
+      description: mateSituation,
+      indicators: accessible
+        ? "Placement = / ↓ · Fatigue ↑ · Impact collectif ↑↑"
+        : "Action indisponible",
+      disabled: !accessible,
+    },
+  };
+}
+
 function terrainAffinity(rider: Rider, phase: InteractiveRacePhase) {
   const key = rider.stats[phase.keyStat];
   const profileBonus =
@@ -551,6 +753,7 @@ export function resolveInteractivePhase(
 ): InteractiveRaceState {
   const current = state.phases[state.phaseIndex];
   if (!current) return state;
+  if (choice === "teamwork" && state.teamMateAccessible === false) return state;
   const roll = seededRandom(hash(`${state.seed}-${current.id}-${choice}`))();
   const currentFatigue = rider.fatigue + state.fatigueDelta;
   const affinity = terrainAffinity(rider, current);
@@ -629,22 +832,8 @@ export function resolveInteractivePhase(
     -5,
     5,
   );
-  const group =
-    position <= 7
-      ? "Groupe de tête"
-      : position <= 20
-        ? "Peloton principal"
-        : position <= 27
-          ? "Groupe poursuivant"
-          : "Groupe attardé";
-  const targetGap =
-    group === "Groupe de tête"
-      ? 0
-      : group === "Peloton principal"
-        ? 5 + Math.max(0, position - 12) * 1.2
-        : group === "Groupe poursuivant"
-          ? 16 + (position - 20) * 3.2
-          : 48 + (position - 27) * 7;
+  const group = groupForPosition(position);
+  const targetGap = gapForPosition(position);
   const gapSeconds = Math.max(
     0,
     Math.round(state.gapSeconds * 0.45 + targetGap * 0.55 + (roll - 0.5) * 4),
@@ -652,6 +841,38 @@ export function resolveInteractivePhase(
   const teamImpact =
     choice === "teamwork" && state.teamMateId ? (success ? 0.8 : 0.35) : 0;
   const teamSupport = clamp((state.teamSupport ?? 0) + teamImpact, 0, 4);
+  const mateRoll = seededRandom(
+    hash(`${state.seed}-${current.id}-${state.teamMateId ?? "none"}-mate`),
+  )();
+  const teamMatePosition = state.teamMatePosition
+    ? clamp(state.teamMatePosition + Math.round((mateRoll - 0.5) * 4), 1, 31)
+    : undefined;
+  const teamMateGroup = teamMatePosition
+    ? groupForPosition(teamMatePosition)
+    : undefined;
+  const teamMateGapSeconds = teamMatePosition
+    ? Math.max(
+        0,
+        Math.round(
+          (state.teamMateGapSeconds ?? gapForPosition(teamMatePosition)) *
+            0.55 +
+            gapForPosition(teamMatePosition) * 0.45 +
+            (mateRoll - 0.5) * 4,
+        ),
+      )
+    : undefined;
+  const teamMateAccessible = Boolean(
+    teamMateGroup &&
+    teamMateGapSeconds !== undefined &&
+    teamMateIsAccessible(group, gapSeconds, teamMateGroup, teamMateGapSeconds),
+  );
+  const failedAttackReason = attackFailureReason(
+    state,
+    rider,
+    current,
+    affinity,
+    currentFatigue,
+  );
   const reason = success
     ? choice === "attack"
       ? `Accélération efficace grâce à ${current.keyStat}.`
@@ -661,7 +882,7 @@ export function resolveInteractivePhase(
           ? `Bonne récupération à l'abri du groupe.`
           : `${state.teamMateName ?? "L'équipier"} profite du travail de Julian.`
     : choice === "attack"
-      ? `L'attaque échoue : terrain ou énergie insuffisants.`
+      ? failedAttackReason
       : choice === "follow"
         ? `Le changement de rythme ouvre un petit écart.`
         : choice === "conserve"
@@ -677,6 +898,10 @@ export function resolveInteractivePhase(
     fatigueDelta,
     performanceDelta,
     teamSupport,
+    teamMatePosition,
+    teamMateGroup,
+    teamMateGapSeconds,
+    teamMateAccessible,
     groups: updateGroups(state.groups ?? initialGroups(), current, roll),
     choices: [...state.choices, choice],
     log: [
@@ -695,6 +920,29 @@ export function resolveInteractivePhase(
       },
     ],
   };
+}
+
+function attackFailureReason(
+  state: InteractiveRaceState,
+  rider: Rider,
+  phase: InteractiveRacePhase,
+  affinity: number,
+  fatigue: number,
+) {
+  if (state.gapSeconds >= 35 || state.group === "Groupe attardé")
+    return "Attaque ratée — le groupe était trop loin au moment de l’effort.";
+  if (fatigue >= 70 && state.position > 18)
+    return "Attaque ratée — fatigue trop élevée et position défavorable.";
+  if (affinity < 55)
+    return "Attaque ratée — terrain peu adapté au profil de Julian.";
+  if (
+    fatigue >= 60 ||
+    (phase.situation === "acceleration" && rider.stats.resistance < 60)
+  )
+    return "Attaque ratée — Julian manque de ressources pour répondre à l’accélération.";
+  if (state.position > 20)
+    return "Attaque ratée — position trop défavorable pour atteindre l’avant du groupe.";
+  return "Attaque ratée — le rythme du groupe neutralise l’effort de Julian.";
 }
 
 function updateGroups(

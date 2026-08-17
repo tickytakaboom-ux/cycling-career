@@ -34,7 +34,10 @@ import type {
 } from "../game/models";
 import { restPreview, trainingPreview } from "../game/progression/previews";
 import { rainLabels, weatherEffect, windLabels } from "../game/weather/weather";
-import { interactiveTendency } from "../game/simulation/interactiveRace";
+import {
+  interactiveChoiceDescriptions,
+  interactiveTendency,
+} from "../game/simulation/interactiveRace";
 import {
   riderRankings,
   teamRankings,
@@ -1009,32 +1012,14 @@ function InteractiveRaceModal({
   const raceData = game.calendar.find((item) => item.id === state.raceId)!;
   const current = state.phases[state.phaseIndex];
   const progress = current ? (current.km / raceData.distance) * 100 : 100;
-  const choices: Array<[InteractiveRaceChoice, string, string, string]> = [
-    [
-      "attack",
-      "Attaquer",
-      "Gagner nettement des places, avec un coût énergétique élevé.",
-      "Placement ↑↑ · Fatigue ↑↑ · Risque élevé",
-    ],
-    [
-      "follow",
-      "Suivre le mouvement",
-      "Limiter les risques avec un effort mesuré.",
-      "Placement ↑ / = · Fatigue ↑ · Risque faible",
-    ],
-    [
-      "conserve",
-      "Économiser",
-      "Réduire la dépense, au risque de reculer.",
-      "Placement = / ↓ · Fatigue ↓ · Risque moyen",
-    ],
-    [
-      "teamwork",
-      `Aider ${state.teamMateName ?? "un équipier"}`,
-      "Miser sur le collectif et le placement.",
-      "Placement = / ↓ · Fatigue ↑ · Impact collectif ↑↑",
-    ],
-  ];
+  const choiceContent = interactiveChoiceDescriptions(
+    state,
+    game.rider,
+    raceData,
+  );
+  const choices = (Object.keys(choiceContent) as InteractiveRaceChoice[]).map(
+    (id) => [id, choiceContent[id]] as const,
+  );
   return (
     <div className="modal-back interactive-back">
       <div className="modal interactive-race">
@@ -1129,14 +1114,15 @@ function InteractiveRaceModal({
               </p>
             </section>
             <div className="race-choices">
-              {choices.map(([id, label, description, indicators]) => (
+              {choices.map(([id, content]) => (
                 <button
                   key={id}
+                  disabled={content.disabled}
                   onClick={() => update(chooseInteractiveRaceAction(game, id))}
                 >
-                  <b>{label}</b>
-                  <small>{description}</small>
-                  <em>{indicators}</em>
+                  <b>{content.label}</b>
+                  <small>{content.description}</small>
+                  <em>{content.indicators}</em>
                 </button>
               ))}
             </div>

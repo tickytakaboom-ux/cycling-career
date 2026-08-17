@@ -45,6 +45,7 @@ import {
 import { simulateRace } from "../game/simulation/raceSimulation";
 import {
   interactiveFinalModifier,
+  selectInteractiveTeamMate,
   resolveInteractivePhase,
   seededRandom,
   startInteractiveRace as createInteractiveRace,
@@ -627,10 +628,11 @@ export function beginInteractiveRace(
   )
     return { ...game, notice: "Cette course ne peut être lancée aujourd’hui." };
   if (game.activeRace?.raceId === raceId) return game;
-  const selected = new Set(target.selectedTeamMateIds ?? []);
-  const teamMate = game.team.roster
-    .filter((mate) => selected.has(mate.id))
-    .sort((a, b) => b.level - a.level)[0];
+  const teamMate = selectInteractiveTeamMate(
+    target,
+    game.team.roster,
+    target.selectedTeamMateIds ?? [],
+  );
   return {
     ...game,
     activeRace: createInteractiveRace(

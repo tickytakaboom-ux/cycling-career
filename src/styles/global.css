@@ -686,6 +686,9 @@ p {
   z-index: 30;
   box-shadow: 0 30px 80px #000a;
   border-top: 5px solid var(--lime);
+  max-height: calc(100dvh - 50px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .result > button {
   position: absolute;
@@ -1432,13 +1435,14 @@ p {
   }
 }
 .interactive-back {
-  align-items: flex-start;
-  overflow-y: auto;
-  padding: 32px 18px;
+  align-items: center;
+  padding: 18px;
 }
 .interactive-race {
   width: min(900px, 96vw);
-  max-height: none;
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .interactive-header,
 .race-live-stats,
@@ -1585,9 +1589,18 @@ p {
   color: var(--muted);
 }
 .race-choices em {
-  color: var(--lime);
+  color: #26320b;
   font-size: 0.68rem;
   font-style: normal;
+  font-weight: 800;
+}
+.race-choices button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+.race-choices button:disabled em,
+.race-choices button:disabled small {
+  color: #4b312d;
 }
 .race-last-event {
   display: grid;
@@ -1612,6 +1625,19 @@ p {
   .race-live-stats,
   .race-choices {
     grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-height: 760px) {
+  .interactive-race {
+    padding: 18px;
+  }
+  .race-groups {
+    height: 88px;
+    margin-bottom: 10px;
+  }
+  .race-track {
+    height: 62px;
+    margin-block: 10px;
   }
 }
 .event-heading {

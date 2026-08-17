@@ -245,6 +245,10 @@ export interface InteractiveRaceState {
   groups: InteractiveRaceGroup[];
   teamMateId?: string;
   teamMateName?: string;
+  teamMatePosition?: number;
+  teamMateGroup?: string;
+  teamMateGapSeconds?: number;
+  teamMateAccessible?: boolean;
   teamSupport: number;
   choices: InteractiveRaceChoice[];
   log: InteractiveRaceLog[];

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createRider } from "../data/riders";
 import {
   createRacePhases,
+  interactiveChoiceDescriptions,
   interactiveFinalModifier,
   interactiveTendency,
   resolveInteractivePhase,
+  selectInteractiveTeamMate,
   startInteractiveRace,
 } from "../game/simulation/interactiveRace";
 import {
@@ -110,11 +112,84 @@ describe("phases de course V1.7", () => {
       "groups",
       mate,
     );
-    const next = resolveInteractivePhase(state, game.rider, "teamwork");
+    const accessible = { ...state, teamMateAccessible: true };
+    const next = resolveInteractivePhase(accessible, game.rider, "teamwork");
     expect(next.gapSeconds).not.toBe(state.gapSeconds);
     expect(next.groups).not.toEqual(state.groups);
     expect(next.teamMateName).toBe(mate.name);
     expect(next.teamSupport).toBeGreaterThan(0);
+  });
+
+  it("sélectionne parmi les coureurs effectivement engagés selon la course", () => {
+    const game = createGame(rider());
+    const race = { ...game.calendar[0], terrain: "montagne" as const };
+    const selected = game.team.roster.slice(0, 3);
+    const target = selectInteractiveTeamMate(
+      race,
+      game.team.roster,
+      selected.map((mate) => mate.id),
+    );
+    expect(target).toBeDefined();
+    expect(selected.map((mate) => mate.id)).toContain(target!.id);
+    expect(
+      selectInteractiveTeamMate(race, game.team.roster, [selected[1].id])?.id,
+    ).toBe(selected[1].id);
+  });
+
+  it("décrit le contexte sans autoriser un équipier hors de portée", () => {
+    const game = createGame(rider());
+    const mate = game.team.roster[0];
+    const state = {
+      ...startInteractiveRace(
+        game.calendar[0],
+        game.rider,
+        "normal",
+        "context",
+        mate,
+      ),
+      position: 23,
+      group: "Groupe poursuivant",
+      gapSeconds: 28,
+      fatigueDelta: 20,
+      teamMateAccessible: false,
+      teamMateGroup: "Peloton principal",
+    };
+    const descriptions = interactiveChoiceDescriptions(
+      state,
+      { ...game.rider, fatigue: 65 },
+      game.calendar[0],
+    );
+    expect(descriptions.attack.description).toContain("ressources");
+    expect(descriptions.conserve.description).toContain("écart");
+    expect(descriptions.teamwork.disabled).toBe(true);
+    expect(descriptions.teamwork.label).not.toContain(mate.name);
+    expect(descriptions.teamwork.description).toBe(
+      "Impossible d’aider cet équipier depuis votre groupe",
+    );
+    expect(resolveInteractivePhase(state, game.rider, "teamwork")).toEqual(
+      state,
+    );
+  });
+
+  it("explique une attaque ratée avec le facteur réellement défavorable", () => {
+    const game = createGame(rider());
+    const state = {
+      ...startInteractiveRace(
+        game.calendar[0],
+        game.rider,
+        "normal",
+        "failed-attack",
+      ),
+      position: 29,
+      group: "Groupe attardé",
+      gapSeconds: 55,
+    };
+    const next = resolveInteractivePhase(
+      state,
+      { ...game.rider, fatigue: 95 },
+      "attack",
+    );
+    expect(next.log[0].text).toContain("le groupe était trop loin");
   });
 });
 
@@ -131,8 +206,13 @@ describe("boucle interactive complète", () => {
       "follow",
       "conserve",
       "attack",
-    ] as const)
-      game = chooseInteractiveRaceAction(game, choice);
+    ] as const) {
+      const availableChoice =
+        choice === "teamwork" && game.activeRace?.teamMateAccessible === false
+          ? "follow"
+          : choice;
+      game = chooseInteractiveRaceAction(game, availableChoice);
+    }
     return finishInteractiveRace(game);
   };
 
@@ -193,8 +273,13 @@ describe("boucle interactive complète", () => {
         "follow",
         "attack",
         "conserve",
-      ] as const)
-        game = chooseInteractiveRaceAction(game, choice);
+      ] as const) {
+        const availableChoice =
+          choice === "teamwork" && game.activeRace?.teamMateAccessible === false
+            ? "follow"
+            : choice;
+        game = chooseInteractiveRaceAction(game, availableChoice);
+      }
       return finishInteractiveRace(game);
     };
     expect(run().lastResult).toEqual(run().lastResult);
