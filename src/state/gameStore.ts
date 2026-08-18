@@ -691,10 +691,12 @@ export function finishInteractiveRace(game: GameState): GameState {
             : entry.consequence;
         const explanation =
           separator >= 0 ? entry.consequence.slice(separator + 3) : undefined;
+        const [advantageImpact, fatigueImpact] = impact.split(" · ");
         return [
           `Km ${entry.km} — ${entry.text.split(" — ")[0]}`,
           `↳ ${entry.positionBefore}e → ${entry.positionAfter}e`,
-          `↳ ${impact}`,
+          `↳ ${advantageImpact}`,
+          `↳ ${fatigueImpact ?? "Fatigue inchangée"}`,
           `↳ ${explanation ?? entry.text.split(" — ").slice(1).join(" — ")}`,
         ];
       }),

@@ -532,8 +532,16 @@ const choiceLabels = {
   attack: "Attaquer",
   follow: "Suivre le mouvement",
   conserve: "Économiser",
-  teamwork: "Aider l'équipe",
 } as const;
+
+function choiceLabel(
+  choice: InteractiveRaceChoice,
+  state: InteractiveRaceState,
+) {
+  return choice === "teamwork"
+    ? `Aider ${state.teamMateName ?? "un équipier"}`
+    : choiceLabels[choice];
+}
 
 const terrainProfileFit: Record<
   Terrain,
@@ -675,6 +683,15 @@ const statLabels: Record<keyof Rider["stats"], string> = {
   weather: "adaptation météo",
 };
 
+const terrainDescriptions: Record<Terrain, string> = {
+  montagne: "montagneux",
+  sprint: "destiné aux sprinteurs",
+  paves: "pavé",
+  chrono: "contre-la-montre",
+  plaine: "de plaine",
+  vallons: "vallonné",
+};
+
 function riderQuality(rider: Rider, key: keyof Rider["stats"]) {
   const value = rider.stats[key];
   const label = statLabels[key];
@@ -686,11 +703,25 @@ function riderQuality(rider: Rider, key: keyof Rider["stats"]) {
 
 function currentRaceGuidance(state: InteractiveRaceState) {
   const advantage = state.performanceDelta ?? 0;
-  if (advantage >= 1)
-    return "L’avantage acquis lui permet d’exploiter une situation favorable.";
-  if (advantage <= -1)
-    return "Son désavantage actuel l’oblige surtout à limiter les pertes.";
-  return "La course reste équilibrée et chaque dépense peut encore compter.";
+  if (advantage >= 0.75) return "L’avantage déjà acquis peut être exploité.";
+  if (advantage <= -0.75)
+    return "Le désavantage actuel impose surtout de limiter les pertes.";
+  return "";
+}
+
+function secondaryRiderContext(rider: Rider) {
+  if (rider.form < 50) return "Sa forme du jour réduit sa marge.";
+  if (rider.stats.tactics < 50)
+    return "Son déficit tactique complique le choix du bon moment.";
+  if (rider.form >= 75)
+    return "Sa très bonne forme lui donne davantage de marge.";
+  if (rider.stats.tactics >= 70)
+    return "Sa lecture de course l’aide à choisir le bon moment.";
+  return "";
+}
+
+function joinContext(...parts: Array<string | false | undefined>) {
+  return parts.filter(Boolean).join(" ");
 }
 
 export function interactiveChoiceDescriptions(
@@ -710,6 +741,7 @@ export function interactiveChoiceDescriptions(
   const keyStat = phase?.keyStat ?? terrainStat[race.terrain];
   const quality = riderQuality(rider, keyStat);
   const guidance = currentRaceGuidance(state);
+  const secondary = secondaryRiderContext(rider);
   const phaseContext =
     phase?.situation === "technical"
       ? "dans ce passage technique"
@@ -720,25 +752,64 @@ export function interactiveChoiceDescriptions(
           : underPressure
             ? "face à l'accélération"
             : "dans cette phase calme";
-  const attack = tired
-    ? `Attaque très risquée ${phaseContext} : avec ${quality}, Julian dispose surtout de ressources limitées par sa fatigue. ${guidance}`
-    : poorlyPlaced
-      ? `Avec ${quality}, Julian peut tenter de combler des places, mais son groupe et l'écart avec l'avant rendent l'effort incertain. ${guidance}`
-      : favorable
-        ? `Le passage sollicite ${quality} : Julian peut prendre l'initiative sans garantie de réussite. ${guidance}`
-        : `Le passage sollicite ${quality} : une attaque est moins intéressante et reste risquée. ${guidance}`;
+  const phaseFocus = `Sur ce parcours ${terrainDescriptions[race.terrain]}, cette phase sollicite principalement ${quality}.`;
+  const placementWarning = poorlyPlaced
+    ? `Depuis la ${state.position}e place du ${state.group.toLowerCase()}, combler ${state.gapSeconds} s rend l'effort incertain.`
+    : "";
+  const fatigueWarning = tired
+    ? `Avec ${fatigue.toFixed(0)} de fatigue cumulée, l'effort supplémentaire est très risqué.`
+    : "";
+  const attack = joinContext(
+    phaseFocus,
+    fatigueWarning,
+    placementWarning,
+    !tired && !poorlyPlaced && favorable
+      ? "Julian possède les qualités pour prendre l'initiative, sans garantie de réussite."
+      : !tired && !poorlyPlaced
+        ? `L'attaque reste risquée ${phaseContext}.`
+        : "",
+    secondary,
+    guidance,
+  );
   const follow = underPressure
     ? poorlyPlaced
-      ? `Décroché dans le ${state.group.toLowerCase()}, Julian doit s'appuyer sur ${quality} pour limiter les pertes, mais revenir au contact sera difficile. ${guidance}`
-      : `Répondre au changement de rythme sollicite ${quality} et protège le placement, au prix d'un effort mesuré. ${guidance}`
+      ? joinContext(
+          phaseFocus,
+          `Décroché à ${state.gapSeconds} s, Julian peut limiter les pertes, mais revenir au contact sera difficile.`,
+          fatigueWarning,
+          guidance,
+        )
+      : joinContext(
+          phaseFocus,
+          "Répondre au changement de rythme protège le placement, au prix d'un effort mesuré.",
+          fatigueWarning,
+          guidance,
+        )
     : tired
-      ? `Suivre défend la position, mais la fatigue rend tout effort en ${quality} plus risqué. ${guidance}`
-      : `Rester dans les roues en s'appuyant sur ${quality} consolide le groupe sans prendre l'initiative. ${guidance}`;
+      ? joinContext(
+          phaseFocus,
+          "Suivre défend la position, mais les réserves de Julian sont déjà entamées.",
+          guidance,
+        )
+      : joinContext(
+          phaseFocus,
+          "Rester dans les roues consolide le groupe sans prendre l'initiative.",
+          guidance,
+        );
   const conserve = poorlyPlaced
-    ? `Réduit l'effort malgré une position défavorable, mais risque d'augmenter l'écart avec les groupes de devant. ${guidance}`
+    ? joinContext(
+        `Économiser réduit l'effort, mais depuis la ${state.position}e place l'écart de ${state.gapSeconds} s peut encore augmenter.`,
+        guidance,
+      )
     : underPressure
-      ? `Préserve les ressources de Julian, avec un risque de perdre des places pendant l'accélération. ${guidance}`
-      : `Profite de l'accalmie pour récupérer, au risque de céder un peu de terrain. ${guidance}`;
+      ? joinContext(
+          `Préserver ses ressources ${phaseContext} expose Julian à perdre des places malgré son niveau en ${quality}.`,
+          guidance,
+        )
+      : joinContext(
+          "L'accalmie permet de récupérer, au risque de céder un peu de terrain.",
+          guidance,
+        );
   const accessible = Boolean(
     state.teamMateId && state.teamMateAccessible !== false,
   );
@@ -828,6 +899,7 @@ export function resolveInteractivePhase(
     (roll - 0.5) * 10;
   const margin = evaluation - actionDifficulty;
   const success = margin >= 0;
+  const outcome = !success ? "failure" : margin < 4 ? "narrow" : "clear";
   const magnitude =
     choice === "attack"
       ? clamp(3 + Math.round(Math.abs(margin) / 5), 3, 6)
@@ -853,16 +925,27 @@ export function resolveInteractivePhase(
   const advantageChange =
     choice === "attack"
       ? success
-        ? 1.15
+        ? outcome === "clear"
+          ? 1.15
+          : 0.75
         : -0.75
       : choice === "follow"
         ? success
-          ? 0.45
+          ? outcome === "clear"
+            ? 0.45
+            : 0.2
           : -0.35
         : choice === "conserve"
           ? success
-            ? 0.2
-            : -0.2
+            ? current.situation === "steady" || current.situation === "team"
+              ? 0.2
+              : current.situation === "technical"
+                ? 0.05
+                : -0.05
+            : current.situation === "acceleration" ||
+                current.situation === "final"
+              ? -0.35
+              : -0.2
           : success
             ? 0.3
             : -0.15;
@@ -873,10 +956,44 @@ export function resolveInteractivePhase(
   );
   const group = groupForPosition(position);
   const targetGap = gapForPosition(position);
+  const choiceGapEffect =
+    choice === "attack"
+      ? success
+        ? -3
+        : 3
+      : choice === "follow"
+        ? success
+          ? -2
+          : 3
+        : choice === "conserve"
+          ? current.situation === "steady" || current.situation === "team"
+            ? success
+              ? -1
+              : 1
+            : success
+              ? 2
+              : 5
+          : success
+            ? 0
+            : 2;
+  const projectedGap = Math.round(
+    state.gapSeconds * 0.55 +
+      targetGap * 0.45 +
+      choiceGapEffect +
+      (roll - 0.5) * 3,
+  );
+  const maximumGapStep =
+    group !== state.group
+      ? 12
+      : current.situation === "acceleration" || current.situation === "final"
+        ? 7
+        : 4;
   const gapSeconds = Math.max(
     0,
-    Math.round(state.gapSeconds * 0.45 + targetGap * 0.55 + (roll - 0.5) * 4),
+    state.gapSeconds +
+      clamp(projectedGap - state.gapSeconds, -maximumGapStep, maximumGapStep),
   );
+  const gapChange = gapSeconds - state.gapSeconds;
   const teamImpact =
     choice === "teamwork" && state.teamMateId ? (success ? 0.8 : 0.35) : 0;
   const teamSupport = clamp((state.teamSupport ?? 0) + teamImpact, 0, 4);
@@ -911,21 +1028,34 @@ export function resolveInteractivePhase(
     current,
     affinity,
     currentFatigue,
+    roll,
   );
+  const favorableContext =
+    (state.performanceDelta ?? 0) >= 0.75
+      ? " L'avantage déjà acquis facilite cet effort."
+      : rider.form >= 75
+        ? " Sa très bonne forme lui apporte la marge nécessaire."
+        : "";
   const reason = success
     ? choice === "attack"
-      ? `Julian exploite ${riderQuality(rider, current.keyStat)} pour créer une accélération efficace.`
+      ? outcome === "clear"
+        ? `Julian exploite ${riderQuality(rider, current.keyStat)} pour créer une accélération nette${gapChange < 0 ? ` et réduit son écart de ${-gapChange} s` : " et améliore son placement"}.${favorableContext}`
+        : `Julian prend quelques mètres grâce à ${riderQuality(rider, current.keyStat)}, mais l'attaque reste fragile.${favorableContext}`
       : choice === "follow"
-        ? `Son niveau en ${riderQuality(rider, current.keyStat)} lui permet de suivre le rythme sans rupture.`
+        ? outcome === "clear"
+          ? `Son niveau en ${riderQuality(rider, current.keyStat)} lui permet de suivre ${current.situation === "acceleration" ? "l'accélération" : "le rythme"} sans rupture.${favorableContext}`
+          : `Julian reste au contact grâce à ${riderQuality(rider, current.keyStat)}, mais avec difficulté et sans gagner nettement du terrain.${favorableContext}`
         : choice === "conserve"
-          ? `Julian profite de cette situation pour récupérer à l'abri du groupe.`
+          ? current.situation === "steady" || current.situation === "team"
+            ? `Julian récupère pendant que le groupe ralentit${gapChange <= 0 ? " et son écart se stabilise" : `, même si l'écart augmente de ${gapChange} s`}.`
+            : `Julian préserve ses réserves, mais le rythme de la course lui coûte ${Math.max(0, gapChange)} s et un peu d'avantage.`
           : `${state.teamMateName ?? "L'équipier"} gagne du terrain grâce au travail de Julian.`
     : choice === "attack"
       ? failedAttackReason
       : choice === "follow"
         ? followFailureReason(state, rider, current, affinity, currentFatigue)
         : choice === "conserve"
-          ? `Le groupe accélère pendant que Julian temporise : son écart augmente malgré l'énergie économisée.`
+          ? `Le groupe accélère pendant que Julian temporise : son écart augmente de ${Math.max(0, gapChange)} s malgré l'énergie économisée.`
           : `L'effort collectif coûte du placement à Julian, mais améliore la situation de ${state.teamMateName ?? "son équipier"}.`;
   const consequence = `${advantageChange >= 0 ? "+" : ""}${advantageChange.toFixed(2)} avantage · ${fatigueCost >= 0 ? "+" : ""}${fatigueCost.toFixed(1)} fatigue — ${reason}`;
   return {
@@ -949,7 +1079,7 @@ export function resolveInteractivePhase(
         phaseId: current.id,
         km: current.km,
         choice,
-        text: `${choiceLabels[choice]} — ${reason}`,
+        text: `${choiceLabel(choice, state)} — ${reason}`,
         consequence,
         fatigueDelta: fatigueCost,
         performanceDelta: advantageChange,
@@ -967,21 +1097,28 @@ function attackFailureReason(
   phase: InteractiveRacePhase,
   affinity: number,
   fatigue: number,
+  roll: number,
 ) {
-  if (state.gapSeconds >= 35 || isDroppedGroup(state.group))
-    return "Attaque ratée — le groupe était trop loin au moment de l’effort.";
-  if (fatigue >= 70 && state.position > 18)
-    return "Attaque ratée — fatigue trop élevée et position défavorable.";
-  if (affinity < 55)
-    return "Attaque ratée — terrain peu adapté au profil de Julian.";
+  const quality = riderQuality(rider, phase.keyStat);
+  const phaseName = phase.title.toLowerCase();
+  if (fatigue >= 65 && affinity < 60)
+    return `Attaque ratée : Julian manque de ressources dans ${phaseName}. Sa fatigue (${fatigue.toFixed(0)}) et son niveau en ${quality} rendent l'effort trop coûteux.${state.position > 20 ? ` Depuis la ${state.position}e place, les ${state.gapSeconds} s de retard compliquent encore l'attaque.` : ""}`;
   if (
-    fatigue >= 60 ||
-    (phase.situation === "acceleration" && rider.stats.resistance < 60)
+    (state.gapSeconds >= 30 || isDroppedGroup(state.group)) &&
+    state.position > 20
   )
-    return "Attaque ratée — Julian manque de ressources pour répondre à l’accélération.";
-  if (state.position > 20)
-    return "Attaque ratée — position trop défavorable pour atteindre l’avant du groupe.";
-  return "Attaque ratée — le rythme du groupe neutralise l’effort de Julian.";
+    return `Attaque ratée : depuis la ${state.position}e place du ${state.group.toLowerCase()}, les ${state.gapSeconds} s de retard sont trop importants pour atteindre l'avant.`;
+  if (affinity < 55)
+    return `Attaque ratée : ${phaseName} sollicite principalement ${quality}, insuffisant pour faire la différence à ce moment de la course.`;
+  if (fatigue >= 60)
+    return `Attaque ratée : avec ${fatigue.toFixed(0)} de fatigue, Julian manque de ressources pour répondre à l'accélération dans ${phaseName}.`;
+  if (rider.form < 50)
+    return `Attaque ratée : la forme actuelle de Julian ne lui donne pas assez de marge dans ${phaseName}.`;
+  if ((state.performanceDelta ?? 0) <= -0.75)
+    return `Attaque ratée : le désavantage déjà accumulé oblige Julian à produire un effort trop important dans ${phaseName}.`;
+  if (rider.stats.tactics < 50 || roll < 0.35)
+    return `Attaque ratée : Julian déclenche son effort au mauvais moment et le groupe neutralise immédiatement l'accélération.`;
+  return `Attaque ratée : le rythme du groupe est trop élevé pour que son niveau en ${quality} fasse la différence.`;
 }
 
 function followFailureReason(
@@ -997,6 +1134,12 @@ function followFailureReason(
     return "Julian suit le mouvement, mais sa fatigue ne lui permet pas de tenir complètement le rythme.";
   if (affinity < 55)
     return `Julian suit le mouvement, mais son déficit en ${statLabels[phase.keyStat]} ne lui permet pas de tenir complètement le rythme.`;
+  if (rider.form < 50)
+    return "Julian suit le mouvement, mais sa forme actuelle ne lui laisse pas assez de marge pour tenir le rythme.";
+  if ((state.performanceDelta ?? 0) <= -0.75)
+    return "Julian suit le mouvement, mais le désavantage déjà accumulé rend la réponse trop coûteuse.";
+  if (rider.stats.tactics < 50)
+    return "Julian suit le mouvement trop tard : son déficit tactique laisse un petit écart s'ouvrir.";
   if (state.position > 20)
     return "Julian suit le mouvement, mais sa position défavorable ouvre un petit écart.";
   return `Julian suit le mouvement, mais son niveau en ${riderQuality(rider, phase.keyStat)} ne suffit pas face à cette accélération.`;

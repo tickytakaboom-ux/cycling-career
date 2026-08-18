@@ -120,6 +120,176 @@ describe("phases de course V1.7", () => {
     expect(next.teamSupport).toBeGreaterThan(0);
   });
 
+  it("associe chaque action à son propre libellé et à sa propre conséquence", () => {
+    const game = createGame(rider());
+    const mate = game.team.roster[0];
+    const base = {
+      ...startInteractiveRace(
+        game.calendar[0],
+        game.rider,
+        "normal",
+        "action-log",
+        mate,
+      ),
+      teamMateAccessible: true,
+    };
+    const expectedLabels = {
+      attack: "Attaquer",
+      follow: "Suivre le mouvement",
+      conserve: "Économiser",
+      teamwork: `Aider ${mate.name}`,
+    } as const;
+    const descriptions = interactiveChoiceDescriptions(
+      base,
+      game.rider,
+      game.calendar[0],
+    );
+    expect(Object.keys(descriptions)).toEqual([
+      "attack",
+      "follow",
+      "conserve",
+      "teamwork",
+    ]);
+    expect(descriptions.teamwork.disabled).toBe(false);
+    for (const choice of [
+      "attack",
+      "follow",
+      "conserve",
+      "teamwork",
+    ] as const) {
+      const next = resolveInteractivePhase(base, game.rider, choice);
+      expect(next.log[0].choice).toBe(choice);
+      expect(next.log[0].text.startsWith(expectedLabels[choice])).toBe(true);
+      expect(next.log[0].consequence).toContain("avantage");
+      expect(next.log[0].consequence).toContain("fatigue");
+    }
+  });
+
+  it("distingue une réussite nette d'une réussite difficile", () => {
+    const game = createGame(rider());
+    const base = startInteractiveRace(
+      game.calendar[0],
+      game.rider,
+      "normal",
+      "outcome-level",
+    );
+    const strongRider = {
+      ...game.rider,
+      fatigue: 0,
+      form: 88,
+      stats: Object.fromEntries(
+        Object.keys(game.rider.stats).map((key) => [key, 90]),
+      ) as unknown as typeof game.rider.stats,
+    };
+    const clear = resolveInteractivePhase(base, strongRider, "follow");
+    expect(clear.log[0].text).toContain("sans rupture");
+    expect(clear.log[0].text).toContain("tactique (point fort)");
+
+    const balancedRider = {
+      ...strongRider,
+      form: 50,
+      fatigue: 60,
+      stats: Object.fromEntries(
+        Object.keys(game.rider.stats).map((key) => [key, 60]),
+      ) as unknown as typeof game.rider.stats,
+    };
+    const narrow = Array.from({ length: 40 }, (_, index) =>
+      resolveInteractivePhase(
+        startInteractiveRace(
+          game.calendar[0],
+          balancedRider,
+          "normal",
+          `narrow-${index}`,
+        ),
+        balancedRider,
+        "follow",
+      ),
+    ).find((state) => state.log[0].text.includes("avec difficulté"));
+    expect(narrow).toBeDefined();
+    expect(narrow!.log[0].text).toContain("tactique (niveau limité)");
+  });
+
+  it("fait dépendre l'économie du rythme de la phase", () => {
+    const game = createGame(rider());
+    const base = startInteractiveRace(
+      game.calendar[0],
+      game.rider,
+      "normal",
+      "conserve-context",
+    );
+    const phase = { ...base.phases[0], id: "same-conserve-phase" };
+    const calm = resolveInteractivePhase(
+      {
+        ...base,
+        phases: [{ ...phase, situation: "steady" }, ...base.phases.slice(1)],
+      },
+      game.rider,
+      "conserve",
+    );
+    const acceleration = resolveInteractivePhase(
+      {
+        ...base,
+        phases: [
+          { ...phase, situation: "acceleration" },
+          ...base.phases.slice(1),
+        ],
+      },
+      game.rider,
+      "conserve",
+    );
+    expect(acceleration.log[0].performanceDelta).toBeLessThanOrEqual(
+      calm.log[0].performanceDelta,
+    );
+    expect(acceleration.gapSeconds).toBeGreaterThanOrEqual(calm.gapSeconds);
+    expect(acceleration.log[0].text).toContain("réserves");
+  });
+
+  it("fait évoluer les écarts progressivement et de façon déterministe", () => {
+    const game = createGame(rider());
+    const state = startInteractiveRace(
+      game.calendar[0],
+      game.rider,
+      "normal",
+      "natural-gaps",
+    );
+    const first = resolveInteractivePhase(state, game.rider, "attack");
+    const replay = resolveInteractivePhase(state, game.rider, "attack");
+    expect(first.gapSeconds).toBe(replay.gapSeconds);
+    expect(Math.abs(first.gapSeconds - state.gapSeconds)).toBeLessThanOrEqual(
+      12,
+    );
+  });
+
+  it("laisse des trajectoires nettement différentes selon les choix", () => {
+    const game = createGame(rider());
+    const base = startInteractiveRace(
+      game.calendar[0],
+      game.rider,
+      "normal",
+      "meaningful-choices",
+    );
+    const playPlan = (choice: "attack" | "follow" | "conserve") => {
+      let state = base;
+      while (state.phaseIndex < state.phases.length)
+        state = resolveInteractivePhase(state, game.rider, choice);
+      return state;
+    };
+    const attack = playPlan("attack");
+    const follow = playPlan("follow");
+    const conserve = playPlan("conserve");
+    expect(
+      new Set([attack.position, follow.position, conserve.position]).size,
+    ).toBeGreaterThan(1);
+    expect(
+      new Set([
+        attack.performanceDelta,
+        follow.performanceDelta,
+        conserve.performanceDelta,
+      ]).size,
+    ).toBe(3);
+    expect(attack.fatigueDelta).toBeGreaterThan(conserve.fatigueDelta);
+  });
+
   it("sélectionne parmi les coureurs effectivement engagés selon la course", () => {
     const game = createGame(rider());
     const race = { ...game.calendar[0], terrain: "montagne" as const };
@@ -159,7 +329,7 @@ describe("phases de course V1.7", () => {
       { ...game.rider, fatigue: 65 },
       game.calendar[0],
     );
-    expect(descriptions.attack.description).toContain("ressources");
+    expect(descriptions.attack.description).toContain("fatigue cumulée");
     expect(descriptions.conserve.description).toContain("écart");
     expect(descriptions.teamwork.disabled).toBe(true);
     expect(descriptions.teamwork.label).not.toContain(mate.name);
@@ -195,7 +365,29 @@ describe("phases de course V1.7", () => {
       { ...game.calendar[0], terrain: "montagne" },
     );
     expect(descriptions.attack.description).toContain("montagne (point fort)");
-    expect(descriptions.attack.description).toContain("avantage acquis");
+    expect(descriptions.attack.description).toContain("avantage déjà acquis");
+  });
+
+  it("décrit la caractéristique de la phase courante sans reprendre la précédente", () => {
+    const game = createGame(rider());
+    const race = { ...game.calendar[0], terrain: "montagne" as const };
+    const base = startInteractiveRace(race, game.rider, "normal", "phase-stat");
+    const ascent = interactiveChoiceDescriptions(
+      { ...base, phaseIndex: 2 },
+      game.rider,
+      race,
+    );
+    const valley = interactiveChoiceDescriptions(
+      { ...base, phaseIndex: 3 },
+      game.rider,
+      race,
+    );
+    expect(ascent.follow.description).toContain("ascension");
+    expect(valley.follow.description).toContain("endurance");
+    expect(valley.follow.description).not.toContain("ascension");
+    expect(valley.follow.description).not.toContain(
+      "La course reste équilibrée",
+    );
   });
 
   it("affiche Retardataires sans changer l'identifiant technique du groupe", () => {
@@ -229,7 +421,8 @@ describe("phases de course V1.7", () => {
       { ...game.rider, fatigue: 95 },
       "attack",
     );
-    expect(next.log[0].text).toContain("le groupe était trop loin");
+    expect(next.log[0].text).toContain("55 s de retard");
+    expect(next.log[0].text).toContain("29e place");
   });
 });
 
@@ -273,7 +466,7 @@ describe("boucle interactive complète", () => {
     expect(game.lastResult!.events).toContain("Décisions et conséquences");
     expect(
       game.lastResult!.events.filter((event) => event.startsWith("↳")),
-    ).toHaveLength(21);
+    ).toHaveLength(28);
     expect(game.lastResult!.breakdown.interactive).toBeDefined();
     expect(game.calendar[0].result?.events).toEqual(game.lastResult?.events);
     expect(game.currentDate).toBe("2027-02-09");
@@ -312,6 +505,35 @@ describe("boucle interactive complète", () => {
       performanceDelta: -0.3,
     };
     expect(interactiveFinalModifier(state)).toBeCloseTo(-0.3);
+  });
+
+  it("transmet uniquement l'avantage interactif sur un échantillon déterministe", () => {
+    const gaps: number[] = [];
+    for (let sample = 0; sample < 36; sample++) {
+      let game = advanceToNextRace(createGame(rider()));
+      game = { ...game, careerId: `coherence-${sample}` };
+      game = beginInteractiveRace(game, game.calendar[0].id, "normal");
+      const plan = [
+        "follow",
+        sample % 2 ? "attack" : "conserve",
+        "follow",
+        sample % 3 ? "conserve" : "attack",
+        "follow",
+        "attack",
+        "conserve",
+      ] as const;
+      for (const choice of plan)
+        game = chooseInteractiveRaceAction(game, choice);
+      const interactive = game.activeRace!;
+      const finished = finishInteractiveRace(game);
+      expect(finished.lastResult?.breakdown.interactive).toBeCloseTo(
+        interactive.performanceDelta,
+      );
+      gaps.push(Math.abs(finished.lastResult!.position - interactive.position));
+    }
+    const averageGap = gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
+    expect(averageGap).toBeLessThan(8);
+    expect(Math.max(...gaps)).toBeLessThan(12);
   });
 
   it("rend visible le bénéfice collectif dans le résultat final", () => {

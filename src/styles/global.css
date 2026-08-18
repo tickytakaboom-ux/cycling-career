@@ -689,6 +689,8 @@ p {
   max-height: calc(100dvh - 50px);
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  box-sizing: border-box;
 }
 .result > button {
   position: absolute;
@@ -1443,6 +1445,7 @@ p {
   max-height: calc(100dvh - 36px);
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .interactive-header,
 .race-live-stats,
@@ -1620,6 +1623,17 @@ p {
 }
 .race-finish-ready .big {
   margin-top: 12px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+@media (max-width: 420px) {
+  .result {
+    inset: 12px;
+    width: auto;
+    max-height: calc(100dvh - 24px);
+    padding: 22px;
+  }
 }
 @media (max-width: 700px) {
   .race-live-stats,
@@ -1652,6 +1666,11 @@ p {
   margin-top: 14px;
   color: #20271e;
   font-weight: 800;
+}
+.result .event-heading {
+  padding-top: 10px;
+  border-top: 1px solid #cdd3c7;
+  color: #426100 !important;
 }
 .result .event-detail {
   margin: 3px 0 3px 12px;
