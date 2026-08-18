@@ -13,7 +13,6 @@ import type {
 import { careerTeams } from "../data/careerTeams";
 import { starterTeam } from "../data/teams";
 import { raceTemplates } from "../data/races";
-import { generateOpponents } from "../data/riders";
 import {
   careerLevel,
   claimObjectiveBonuses,
@@ -21,7 +20,7 @@ import {
   updateObjectives,
 } from "../game/career/careerProgression";
 import { generateOffers, resolveOffer } from "../game/career/contracts";
-import { fieldRange, generateTeamCalendar } from "../game/career/teams";
+import { generateTeamCalendar } from "../game/career/teams";
 import {
   selectTeamMates,
   simulateTeamMates,
@@ -51,6 +50,11 @@ import {
   startInteractiveRace as createInteractiveRace,
 } from "../game/simulation/interactiveRace";
 import type { RandomSource } from "../game/simulation/random";
+import {
+  createInteractiveParticipants,
+  createRaceField,
+  synchronizeParticipantSituations,
+} from "../game/simulation/raceField";
 import { generateWeather } from "../game/weather/weather";
 import {
   createWorld,
@@ -512,8 +516,7 @@ export function race(
       ...game,
       notice: "Cette course ne peut être disputée qu’à sa date prévue.",
     };
-  const range = fieldRange(target.competitionLevel ?? game.team.level),
-    field = generateOpponents((range.average[0] + range.average[1]) / 2),
+  const field = createRaceField(target, game.team.level),
     selected = target.selectedTeamMateIds ?? [],
     result = simulateRace(
       game.rider,
@@ -633,15 +636,29 @@ export function beginInteractiveRace(
     game.team.roster,
     target.selectedTeamMateIds ?? [],
   );
+  const activeRace = createInteractiveRace(
+    target,
+    game.rider,
+    strategy,
+    `${game.careerId}-${game.season.year}`,
+    teamMate,
+  );
+  const field = createRaceField(target, game.team.level);
+  const participants = synchronizeParticipantSituations(
+    createInteractiveParticipants(
+      field,
+      target,
+      game.team.roster,
+      target.selectedTeamMateIds ?? [],
+    ),
+    activeRace,
+  );
   return {
     ...game,
-    activeRace: createInteractiveRace(
-      target,
-      game.rider,
-      strategy,
-      `${game.careerId}-${game.season.year}`,
-      teamMate,
-    ),
+    activeRace: {
+      ...activeRace,
+      participants,
+    },
     notice: `Départ de ${target.name}.`,
   };
 }
@@ -651,9 +668,20 @@ export function chooseInteractiveRaceAction(
   choice: InteractiveRaceChoice,
 ): GameState {
   if (!game.activeRace) return game;
+  const activeRace = resolveInteractivePhase(
+    game.activeRace,
+    game.rider,
+    choice,
+  );
   return {
     ...game,
-    activeRace: resolveInteractivePhase(game.activeRace, game.rider, choice),
+    activeRace: {
+      ...activeRace,
+      participants: synchronizeParticipantSituations(
+        activeRace.participants ?? [],
+        activeRace,
+      ),
+    },
   };
 }
 
@@ -706,6 +734,8 @@ export function finishInteractiveRace(game: GameState): GameState {
             `${active.teamMateName ?? "L'équipier"} gagne du terrain grâce au travail de Julian (bonus +${active.teamSupport.toFixed(2)}).`,
           ]
         : []),
+      "Charge de course",
+      `Fatigue structurelle : +${finished.lastResult.fatigueCost} · Effort interactif : +${active.fatigueDelta.toFixed(1)} · Total appliqué : +${(finished.lastResult.fatigueCost + active.fatigueDelta).toFixed(1)}.`,
       ...finished.lastResult.events,
     ],
   };

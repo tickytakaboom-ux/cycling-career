@@ -230,6 +230,17 @@ export interface InteractiveRaceLog {
   positionBefore: number;
   positionAfter: number;
 }
+export interface InteractiveRaceParticipant {
+  riderId: string;
+  name: string;
+  profile: RiderProfile;
+  source: "opponent" | "teamMate";
+  expectedPosition: number;
+  situationPosition?: number;
+  situationGroup?: string;
+  situationGapSeconds?: number;
+  favoriteTier?: "favorite" | "contender" | "outsider";
+}
 export interface InteractiveRaceState {
   raceId: string;
   seed: number;
@@ -243,6 +254,7 @@ export interface InteractiveRaceState {
   performanceDelta: number;
   startPosition: number;
   groups: InteractiveRaceGroup[];
+  participants?: InteractiveRaceParticipant[];
   teamMateId?: string;
   teamMateName?: string;
   teamMatePosition?: number;

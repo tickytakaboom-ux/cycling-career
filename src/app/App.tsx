@@ -38,6 +38,7 @@ import {
   interactiveChoiceDescriptions,
   interactiveTendency,
 } from "../game/simulation/interactiveRace";
+import { participantsNearPosition } from "../game/simulation/raceField";
 import {
   riderRankings,
   teamRankings,
@@ -276,6 +277,12 @@ function Offers({
   update: (g: GameState) => void;
   nextSeason?: boolean;
 }) {
+  const resolvedOffers = game.career.offers.map((offer) => ({
+    offer,
+    team:
+      game.world.teams.find((team) => team.id === offer.teamId) ??
+      teamById(offer.teamId)!,
+  }));
   return (
     <main className="offers-screen">
       <div className="brand">
@@ -311,34 +318,61 @@ function Offers({
           </p>
         </section>
       )}
+      <section
+        className="contract-comparison"
+        aria-label="Comparaison des offres"
+      >
+        <span className="eyebrow">COMPARAISON RAPIDE</span>
+        <div>
+          {resolvedOffers.map(({ offer, team }) => (
+            <article key={offer.id}>
+              <b>{team.name}</b>
+              <span>{offer.contract.role}</span>
+              <span>{offer.contract.monthlySalary} €/mois</span>
+              <span>
+                Développement {offer.contract.developmentRating.toLowerCase()}
+              </span>
+            </article>
+          ))}
+        </div>
+      </section>
       <div className="offer-grid">
-        {game.career.offers.map((offer) => {
-          const team =
-            game.world.teams.find((team) => team.id === offer.teamId) ??
-            teamById(offer.teamId)!;
-          return (
-            <article
-              className="panel offer-card"
-              key={offer.id}
-              style={{ borderTopColor: team.color }}
-            >
-              <span className="eyebrow">NIVEAU {"★".repeat(team.level)}</span>
-              <h2>{team.name}</h2>
-              <p>
-                {team.country} · Prestige {team.prestige}
-              </p>
+        {resolvedOffers.map(({ offer, team }) => (
+          <article
+            className="panel offer-card"
+            key={offer.id}
+            style={{ borderTopColor: team.color }}
+          >
+            <div className="offer-card-heading">
+              <div>
+                <span className="eyebrow">NIVEAU {"★".repeat(team.level)}</span>
+                <h2>{team.name}</h2>
+                <p>{team.country}</p>
+              </div>
+              <small>Intérêt {offer.interestScore}</small>
+            </div>
+            <div className="contract-facts contract-summary">
+              <span>
+                Rôle <b>{offer.contract.role}</b>
+              </span>
+              <span>
+                Salaire <b>{offer.contract.monthlySalary} €/mois</b>
+              </span>
+              <span>
+                Développement <b>{offer.contract.developmentRating}</b>
+              </span>
+              <span>
+                Calendrier <b>{team.calendarSize} courses</b>
+              </span>
+            </div>
+            <details className="contract-details">
+              <summary>Voir le projet complet</summary>
               <div className="contract-facts">
                 <span>
-                  Salaire <b>{offer.contract.monthlySalary} €/mois</b>
+                  Durée <b>{offer.contract.durationYears} saison</b>
                 </span>
                 <span>
-                  Durée <b>1 saison</b>
-                </span>
-                <span>
-                  Rôle <b>{offer.contract.role}</b>
-                </span>
-                <span>
-                  Développement <b>{offer.contract.developmentRating}</b>
+                  Prestige <b>{team.prestige}</b>
                 </span>
                 <span>
                   Adversaires <b>{offer.contract.opponentDescription}</b>
@@ -350,27 +384,27 @@ function Offers({
               <p>
                 <strong>Spécialités :</strong> {team.specialties.join(", ")}
               </p>
-              <h3>Objectifs</h3>
+              <h3>Objectifs et primes</h3>
               {offer.contract.objectives.map((goal) => (
                 <small className="goal-line" key={goal.id}>
-                  ○ {goal.label}
+                  ○ {goal.label} · {goal.reward} €
                 </small>
               ))}
-              <button
-                className="primary big"
-                onClick={() =>
-                  update(
-                    nextSeason
-                      ? startNextSeason(game, offer.id)
-                      : signContract(game, offer.id),
-                  )
-                }
-              >
-                SIGNER AVEC CETTE ÉQUIPE
-              </button>
-            </article>
-          );
-        })}
+            </details>
+            <button
+              className="primary big"
+              onClick={() =>
+                update(
+                  nextSeason
+                    ? startNextSeason(game, offer.id)
+                    : signContract(game, offer.id),
+                )
+              }
+            >
+              SIGNER AVEC CETTE ÉQUIPE
+            </button>
+          </article>
+        ))}
       </div>
     </main>
   );
@@ -855,7 +889,7 @@ function ResultToast({
       </div>
       {result.events.map((event, index) => (
         <p
-          className={`event ${event === "Décisions" || event === "Conséquences" || event === "Décisions et conséquences" || event === "Impact collectif" ? "event-heading" : event.startsWith("Km ") ? "event-decision" : event.startsWith("↳") ? "event-detail" : ""}`}
+          className={`event ${event === "Décisions" || event === "Conséquences" || event === "Décisions et conséquences" || event === "Impact collectif" || event === "Charge de course" ? "event-heading" : event.startsWith("Km ") ? "event-decision" : event.startsWith("↳") ? "event-detail" : ""}`}
           key={`${index}-${event}`}
         >
           {event}
@@ -1001,6 +1035,208 @@ function WorldView({ game }: { game: GameState }) {
     </div>
   );
 }
+function RaceStatusBar({
+  state,
+}: {
+  state: NonNullable<GameState["activeRace"]>;
+}) {
+  return (
+    <div className="race-status-bar" aria-label="Situation de Julian">
+      <div>
+        <small>POSITION</small>
+        <b>{state.position}e / 31</b>
+      </div>
+      <div>
+        <small>GROUPE</small>
+        <b>{state.group}</b>
+      </div>
+      <div>
+        <small>ÉCART</small>
+        <b>{state.gapSeconds ? `+${state.gapSeconds} s` : "—"}</b>
+      </div>
+      <div>
+        <small>EFFORT</small>
+        <b>+{state.fatigueDelta.toFixed(1)}</b>
+      </div>
+      <div>
+        <small>AVANTAGE</small>
+        <b>
+          {(state.performanceDelta ?? 0) >= 0 ? "+" : ""}
+          {(state.performanceDelta ?? 0).toFixed(1)}
+        </b>
+      </div>
+    </div>
+  );
+}
+
+function RaceSituationMap({
+  state,
+  progress,
+  race,
+}: {
+  state: NonNullable<GameState["activeRace"]>;
+  progress: number;
+  race: CalendarRace;
+}) {
+  const profilePoints = [
+    `0,${race.terrain === "montagne" ? 62 : 70}`,
+    ...state.phases.map((phase) => {
+      const terrainRelief =
+        race.terrain === "montagne"
+          ? 34
+          : race.terrain === "vallons"
+            ? 24
+            : race.terrain === "paves"
+              ? 14
+              : 8;
+      const height = Math.max(
+        12,
+        76 -
+          phase.intensity * terrainRelief -
+          (phase.kind === "difficulty" ? 18 : 0),
+      );
+      return `${(phase.km / race.distance) * 100},${height}`;
+    }),
+    `100,${race.terrain === "montagne" ? 28 : 68}`,
+  ].join(" ");
+  return (
+    <section className="race-situation-map" aria-label="Situation en course">
+      <div className="stage-profile-heading">
+        <div>
+          <span className="eyebrow">PROFIL SCHÉMATIQUE</span>
+          <b>
+            {race.distance} km · {race.elevation} m D+
+          </b>
+        </div>
+        <small>{race.terrain}</small>
+      </div>
+      <div className="stage-profile" aria-label="Profil schématique de l'étape">
+        <svg viewBox="0 0 100 84" preserveAspectRatio="none" aria-hidden="true">
+          <polygon points={`0,84 ${profilePoints} 100,84`} />
+          <polyline points={profilePoints} />
+        </svg>
+        {state.phases.map((phase, index) => (
+          <span
+            className={index === state.phaseIndex ? "current" : ""}
+            key={phase.id}
+            style={{ left: `${(phase.km / race.distance) * 100}%` }}
+            title={`${phase.title} · km ${phase.km}`}
+          />
+        ))}
+        <div className="stage-profile-rider" style={{ left: `${progress}%` }}>
+          JS
+        </div>
+      </div>
+      <div className="race-groups" aria-label="Groupes en course">
+        {(state.groups ?? []).map((group) => (
+          <div
+            className={`race-group ${group.kind}`}
+            key={group.id}
+            style={{
+              left: `${Math.min(97, Math.max(3, progress + (state.gapSeconds - group.gapSeconds) / 2))}%`,
+            }}
+          >
+            <i />
+            <span>{group.label}</span>
+            <small>
+              {group.gapSeconds ? `+${group.gapSeconds} s` : "Tête"}
+            </small>
+          </div>
+        ))}
+        <div className="race-group player" style={{ left: `${progress}%` }}>
+          <i />
+          <span>Julian</span>
+          <small>{state.gapSeconds ? `+${state.gapSeconds} s` : "Tête"}</small>
+        </div>
+      </div>
+      <div className="race-track" aria-label="Progression de la course">
+        <div className="race-track-line" />
+        {state.phases.map((item, index) => (
+          <span
+            className={
+              index < state.phaseIndex
+                ? "passed"
+                : index === state.phaseIndex
+                  ? "current"
+                  : ""
+            }
+            key={item.id}
+            style={{ left: `${(item.km / race.distance) * 100}%` }}
+            title={item.title}
+          />
+        ))}
+        <div className="rider-dot" style={{ left: `${progress}%` }}>
+          JS
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CurrentGroupPanel({
+  state,
+}: {
+  state: NonNullable<GameState["activeRace"]>;
+}) {
+  const riders = participantsNearPosition(
+    state.participants,
+    state.position,
+    5,
+    state.group,
+  );
+  const favorites = riders.filter((rider) => rider.favoriteTier).length;
+  return (
+    <section className="current-group-panel" aria-label="Coureurs avec Julian">
+      <div className="current-group-heading">
+        <div>
+          <span className="eyebrow">DANS LE GROUPE DE JULIAN</span>
+          <b>{state.group}</b>
+        </div>
+        <small>
+          {favorites
+            ? `${favorites} favori${favorites > 1 ? "s" : ""} à proximité`
+            : "Aucun favori à proximité"}
+        </small>
+      </div>
+      <div className="group-rider-list">
+        <div className="group-rider player">
+          <span>JS</span>
+          <div>
+            <b>Julian</b>
+            <small>{state.position}e · votre position</small>
+          </div>
+        </div>
+        {riders.map((rider) => (
+          <div className="group-rider" key={rider.riderId}>
+            <span>
+              {rider.source === "teamMate"
+                ? "ÉQ"
+                : rider.favoriteTier
+                  ? "★"
+                  : "·"}
+            </span>
+            <div>
+              <b>{rider.name}</b>
+              <small>
+                {profileLabels[rider.profile]}
+                {rider.source === "teamMate"
+                  ? " · équipier"
+                  : rider.favoriteTier === "favorite"
+                    ? " · favori"
+                    : rider.favoriteTier === "contender"
+                      ? " · prétendant"
+                      : rider.favoriteTier === "outsider"
+                        ? " · outsider"
+                        : ""}
+              </small>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function InteractiveRaceModal({
   game,
   update,
@@ -1032,134 +1268,81 @@ function InteractiveRaceModal({
             Km {current?.km ?? raceData.distance}/{raceData.distance}
           </b>
         </div>
-        <div className="race-groups" aria-label="Groupes en course">
-          {(state.groups ?? []).map((group) => (
-            <div
-              className={`race-group ${group.kind}`}
-              key={group.id}
-              style={{
-                left: `${Math.min(97, Math.max(3, progress + (state.gapSeconds - group.gapSeconds) / 2))}%`,
-              }}
-            >
-              <i />
-              <span>{group.label}</span>
-              <small>
-                {group.gapSeconds ? `+${group.gapSeconds} s` : "Tête"}
-              </small>
-            </div>
-          ))}
-          <div className="race-group player" style={{ left: `${progress}%` }}>
-            <i />
-            <span>Julian</span>
-            <small>
-              {state.gapSeconds ? `+${state.gapSeconds} s` : "Tête"}
-            </small>
-          </div>
-        </div>
-        <div className="race-track" aria-label="Progression de la course">
-          <div className="race-track-line" />
-          {state.phases.map((item, index) => (
-            <span
-              className={
-                index < state.phaseIndex
-                  ? "passed"
-                  : index === state.phaseIndex
-                    ? "current"
-                    : ""
-              }
-              key={item.id}
-              style={{ left: `${(item.km / raceData.distance) * 100}%` }}
-              title={item.title}
+        <RaceStatusBar state={state} />
+        <div className="interactive-race-layout">
+          <div className="interactive-race-context">
+            <RaceSituationMap
+              state={state}
+              progress={progress}
+              race={raceData}
             />
-          ))}
-          <div className="rider-dot" style={{ left: `${progress}%` }}>
-            JS
+            <CurrentGroupPanel state={state} />
+            {state.log.length > 0 && (
+              <div className="race-last-event">
+                <span className="eyebrow">DERNIÈRE DÉCISION</span>
+                <b>{state.log.at(-1)?.text}</b>
+                <span>{state.log.at(-1)?.consequence}</span>
+              </div>
+            )}
           </div>
-        </div>
-        <div className="race-live-stats">
-          <div>
-            <small>POSITION</small>
-            <b>{state.position}e / 31</b>
-          </div>
-          <div>
-            <small>GROUPE</small>
-            <b>{state.group}</b>
-          </div>
-          <div>
-            <small>ÉCART</small>
-            <b>{state.gapSeconds ? `+${state.gapSeconds} s` : "—"}</b>
-          </div>
-          <div>
-            <small>EFFORT SUPPLÉMENTAIRE</small>
-            <b>+{state.fatigueDelta.toFixed(1)}</b>
-          </div>
-          <div>
-            <small>AVANTAGE DE COURSE</small>
-            <b>
-              {(state.performanceDelta ?? 0) >= 0 ? "+" : ""}
-              {(state.performanceDelta ?? 0).toFixed(1)}
-            </b>
-          </div>
-        </div>
-        {current ? (
-          <>
-            <section className="race-moment">
-              <span className="eyebrow">
-                MOMENT CLÉ {state.phaseIndex + 1}/{state.phases.length}
-              </span>
-              <h2>{current.title}</h2>
-              <p>
-                {current.description} Julian est {state.position}e du{" "}
-                {state.group.toLowerCase()}.
-              </p>
-            </section>
-            <div className="race-choices">
-              {choices.map(([id, content]) => (
-                <button
-                  key={id}
-                  disabled={content.disabled}
-                  onClick={() => update(chooseInteractiveRaceAction(game, id))}
-                >
-                  <b>{content.label}</b>
-                  <small>{content.description}</small>
-                  <em>{content.indicators}</em>
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
-          <section className="race-moment race-finish-ready">
-            <span className="eyebrow">ARRIVÉE EN VUE</span>
-            <h2>Les choix sont faits</h2>
-            <p>
-              Le moteur va maintenant calculer le classement final à partir de
-              l’état obtenu en course.
-            </p>
-            {(() => {
-              const tendency = interactiveTendency(state);
-              return (
-                <div className="race-tendency">
-                  <b>
-                    {tendency.symbol} {tendency.label}
-                  </b>
-                  <span>{tendency.text}</span>
+          <div className="interactive-race-actions">
+            {current ? (
+              <>
+                <section className="race-moment">
+                  <span className="eyebrow">
+                    MOMENT CLÉ {state.phaseIndex + 1}/{state.phases.length}
+                  </span>
+                  <h2>{current.title}</h2>
+                  <p>
+                    {current.description} Julian est {state.position}e du{" "}
+                    {state.group.toLowerCase()}.
+                  </p>
+                </section>
+                <div className="race-choices">
+                  {choices.map(([id, content]) => (
+                    <button
+                      key={id}
+                      disabled={content.disabled}
+                      onClick={() =>
+                        update(chooseInteractiveRaceAction(game, id))
+                      }
+                    >
+                      <b>{content.label}</b>
+                      <small>{content.description}</small>
+                      <em>{content.indicators}</em>
+                    </button>
+                  ))}
                 </div>
-              );
-            })()}
-            <button
-              className="primary big"
-              onClick={() => update(finishInteractiveRace(game))}
-            >
-              CALCULER LE RÉSULTAT <Flag />
-            </button>
-          </section>
-        )}
-        {state.log.length > 0 && (
-          <div className="race-last-event">
-            <b>{state.log.at(-1)?.text}</b>
-            <span>{state.log.at(-1)?.consequence}</span>
+              </>
+            ) : (
+              <section className="race-moment race-finish-ready">
+                <span className="eyebrow">ARRIVÉE EN VUE</span>
+                <h2>Les choix sont faits</h2>
+                <p>
+                  Le moteur va maintenant calculer le classement final à partir
+                  de l’état obtenu en course.
+                </p>
+                {(() => {
+                  const tendency = interactiveTendency(state);
+                  return (
+                    <div className="race-tendency">
+                      <b>
+                        {tendency.symbol} {tendency.label}
+                      </b>
+                      <span>{tendency.text}</span>
+                    </div>
+                  );
+                })()}
+                <button
+                  className="primary big"
+                  onClick={() => update(finishInteractiveRace(game))}
+                >
+                  CALCULER LE RÉSULTAT <Flag />
+                </button>
+              </section>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
