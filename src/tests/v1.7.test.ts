@@ -171,6 +171,46 @@ describe("phases de course V1.7", () => {
     );
   });
 
+  it("cite les qualités réelles et l'avantage actuel du coureur", () => {
+    const game = createGame(rider());
+    const base = startInteractiveRace(
+      { ...game.calendar[0], terrain: "montagne" },
+      game.rider,
+      "normal",
+      "rider-specific",
+    );
+    const state = {
+      ...base,
+      performanceDelta: 1.5,
+      phases: base.phases.map((phase, index) =>
+        index === 0 ? { ...phase, keyStat: "mountain" as const } : phase,
+      ),
+    };
+    const descriptions = interactiveChoiceDescriptions(
+      state,
+      {
+        ...game.rider,
+        stats: { ...game.rider.stats, mountain: 80 },
+      },
+      { ...game.calendar[0], terrain: "montagne" },
+    );
+    expect(descriptions.attack.description).toContain("montagne (point fort)");
+    expect(descriptions.attack.description).toContain("avantage acquis");
+  });
+
+  it("affiche Retardataires sans changer l'identifiant technique du groupe", () => {
+    const game = createGame(rider());
+    const state = startInteractiveRace(
+      game.calendar[0],
+      game.rider,
+      "normal",
+      "group-label",
+    );
+    expect(state.groups.find((group) => group.id === "dropped")?.label).toBe(
+      "Retardataires",
+    );
+  });
+
   it("explique une attaque ratée avec le facteur réellement défavorable", () => {
     const game = createGame(rider());
     const state = {
@@ -229,9 +269,11 @@ describe("boucle interactive complète", () => {
     expect(game.lastResult!.breakdown.interactive).toBeDefined();
     expect(
       game.lastResult!.events.filter((event) => event.startsWith("Km ")),
-    ).toHaveLength(14);
-    expect(game.lastResult!.events).toContain("Décisions");
-    expect(game.lastResult!.events).toContain("Conséquences");
+    ).toHaveLength(7);
+    expect(game.lastResult!.events).toContain("Décisions et conséquences");
+    expect(
+      game.lastResult!.events.filter((event) => event.startsWith("↳")),
+    ).toHaveLength(21);
     expect(game.lastResult!.breakdown.interactive).toBeDefined();
     expect(game.calendar[0].result?.events).toEqual(game.lastResult?.events);
     expect(game.currentDate).toBe("2027-02-09");
@@ -254,6 +296,48 @@ describe("boucle interactive complète", () => {
     expect(interactiveTendency(game.activeRace!).label).toBeTruthy();
     const finished = finishInteractiveRace(game);
     expect(finished.lastResult?.breakdown.interactive).toBeCloseTo(expected);
+  });
+
+  it("ne reconvertit pas une seconde fois le placement en pénalité", () => {
+    const game = createGame(rider());
+    const state = {
+      ...startInteractiveRace(
+        game.calendar[0],
+        game.rider,
+        "normal",
+        "no-double",
+      ),
+      startPosition: 19,
+      position: 25,
+      performanceDelta: -0.3,
+    };
+    expect(interactiveFinalModifier(state)).toBeCloseTo(-0.3);
+  });
+
+  it("rend visible le bénéfice collectif dans le résultat final", () => {
+    let game = advanceToNextRace(createGame(rider()));
+    const mate = game.team.roster[0];
+    game = {
+      ...game,
+      calendar: game.calendar.map((race, index) =>
+        index === 0 ? { ...race, selectedTeamMateIds: [mate.id] } : race,
+      ),
+    };
+    game = beginInteractiveRace(game, game.calendar[0].id, "normal");
+    game = {
+      ...game,
+      activeRace: { ...game.activeRace!, teamMateAccessible: true },
+    };
+    game = chooseInteractiveRaceAction(game, "teamwork");
+    while (game.activeRace!.phaseIndex < game.activeRace!.phases.length)
+      game = chooseInteractiveRaceAction(game, "follow");
+    const finished = finishInteractiveRace(game);
+    expect(finished.lastResult?.events).toContain("Impact collectif");
+    expect(
+      finished.lastResult?.events.some(
+        (event) => event.includes(mate.name) && event.includes("bonus +"),
+      ),
+    ).toBe(true);
   });
 
   it("produit le même résultat depuis exactement le même état et les mêmes choix", () => {

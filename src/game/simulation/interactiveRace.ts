@@ -515,7 +515,7 @@ const initialGroups = (): InteractiveRaceGroup[] => [
   },
   {
     id: "dropped",
-    label: "Attardés",
+    label: "Retardataires",
     gapSeconds: 92,
     size: 3,
     kind: "dropped",
@@ -592,8 +592,11 @@ function groupForPosition(position: number) {
       ? "Peloton principal"
       : position <= 27
         ? "Groupe poursuivant"
-        : "Groupe attardé";
+        : "Groupe retardataire";
 }
+
+const isDroppedGroup = (group: string) =>
+  group === "Groupe retardataire" || group === "Groupe attardé";
 
 function gapForPosition(position: number) {
   return position <= 7
@@ -657,6 +660,39 @@ export interface InteractiveChoiceDescription {
   disabled?: boolean;
 }
 
+const statLabels: Record<keyof Rider["stats"], string> = {
+  mountain: "montagne",
+  sprint: "sprint",
+  climbing: "ascension",
+  timeTrial: "contre-la-montre",
+  pavement: "pavés",
+  endurance: "endurance",
+  explosiveness: "explosivité",
+  recovery: "récupération",
+  descending: "descente",
+  tactics: "tactique",
+  resistance: "résistance",
+  weather: "adaptation météo",
+};
+
+function riderQuality(rider: Rider, key: keyof Rider["stats"]) {
+  const value = rider.stats[key];
+  const label = statLabels[key];
+  if (value >= 72) return `${label} (point fort)`;
+  if (value >= 62) return `${label} (niveau solide)`;
+  if (value < 50) return `${label} (point faible)`;
+  return `${label} (niveau limité)`;
+}
+
+function currentRaceGuidance(state: InteractiveRaceState) {
+  const advantage = state.performanceDelta ?? 0;
+  if (advantage >= 1)
+    return "L’avantage acquis lui permet d’exploiter une situation favorable.";
+  if (advantage <= -1)
+    return "Son désavantage actuel l’oblige surtout à limiter les pertes.";
+  return "La course reste équilibrée et chaque dépense peut encore compter.";
+}
+
 export function interactiveChoiceDescriptions(
   state: InteractiveRaceState,
   rider: Rider,
@@ -671,6 +707,9 @@ export function interactiveChoiceDescriptions(
     state.position > 20 || state.group.includes("poursuivant");
   const tired = fatigue >= 65;
   const favorable = affinity >= 65 || (state.performanceDelta ?? 0) >= 1.5;
+  const keyStat = phase?.keyStat ?? terrainStat[race.terrain];
+  const quality = riderQuality(rider, keyStat);
+  const guidance = currentRaceGuidance(state);
   const phaseContext =
     phase?.situation === "technical"
       ? "dans ce passage technique"
@@ -682,24 +721,24 @@ export function interactiveChoiceDescriptions(
             ? "face à l'accélération"
             : "dans cette phase calme";
   const attack = tired
-    ? `Attaque très risquée ${phaseContext} : les ressources de Julian sont limitées.`
+    ? `Attaque très risquée ${phaseContext} : avec ${quality}, Julian dispose surtout de ressources limitées par sa fatigue. ${guidance}`
     : poorlyPlaced
-      ? `Une attaque peut combler des places, mais l'écart avec l'avant rend l'effort incertain.`
+      ? `Avec ${quality}, Julian peut tenter de combler des places, mais son groupe et l'écart avec l'avant rendent l'effort incertain. ${guidance}`
       : favorable
-        ? `Le profil et la ${phase?.keyStat ?? terrainStat[race.terrain]} de Julian rendent l'initiative pertinente, sans garantie.`
-        : `Le terrain sollicite une qualité moins favorable à Julian : l'attaque reste risquée.`;
+        ? `Le passage sollicite ${quality} : Julian peut prendre l'initiative sans garantie de réussite. ${guidance}`
+        : `Le passage sollicite ${quality} : une attaque est moins intéressante et reste risquée. ${guidance}`;
   const follow = underPressure
     ? poorlyPlaced
-      ? "Compromis pour limiter les pertes et rester au contact de son groupe."
-      : "Répondre au changement de rythme protège le placement, au prix d'un effort mesuré."
+      ? `Décroché dans le ${state.group.toLowerCase()}, Julian doit s'appuyer sur ${quality} pour limiter les pertes, mais revenir au contact sera difficile. ${guidance}`
+      : `Répondre au changement de rythme sollicite ${quality} et protège le placement, au prix d'un effort mesuré. ${guidance}`
     : tired
-      ? "Suivre permet de défendre la position, mais entame des réserves déjà réduites."
-      : "Rester dans les roues consolide le groupe sans prendre l'initiative.";
+      ? `Suivre défend la position, mais la fatigue rend tout effort en ${quality} plus risqué. ${guidance}`
+      : `Rester dans les roues en s'appuyant sur ${quality} consolide le groupe sans prendre l'initiative. ${guidance}`;
   const conserve = poorlyPlaced
-    ? "Réduit l'effort, mais risque d'augmenter l'écart avec les groupes de devant."
+    ? `Réduit l'effort malgré une position défavorable, mais risque d'augmenter l'écart avec les groupes de devant. ${guidance}`
     : underPressure
-      ? "Préserve des ressources, avec un risque de perdre des places pendant l'accélération."
-      : "Profite de l'accalmie pour récupérer, au risque de céder un peu de terrain.";
+      ? `Préserve les ressources de Julian, avec un risque de perdre des places pendant l'accélération. ${guidance}`
+      : `Profite de l'accalmie pour récupérer, au risque de céder un peu de terrain. ${guidance}`;
   const accessible = Boolean(
     state.teamMateId && state.teamMateAccessible !== false,
   );
@@ -875,19 +914,19 @@ export function resolveInteractivePhase(
   );
   const reason = success
     ? choice === "attack"
-      ? `Accélération efficace grâce à ${current.keyStat}.`
+      ? `Julian exploite ${riderQuality(rider, current.keyStat)} pour créer une accélération efficace.`
       : choice === "follow"
-        ? `Le rythme est suivi sans rupture.`
+        ? `Son niveau en ${riderQuality(rider, current.keyStat)} lui permet de suivre le rythme sans rupture.`
         : choice === "conserve"
-          ? `Bonne récupération à l'abri du groupe.`
-          : `${state.teamMateName ?? "L'équipier"} profite du travail de Julian.`
+          ? `Julian profite de cette situation pour récupérer à l'abri du groupe.`
+          : `${state.teamMateName ?? "L'équipier"} gagne du terrain grâce au travail de Julian.`
     : choice === "attack"
       ? failedAttackReason
       : choice === "follow"
-        ? `Le changement de rythme ouvre un petit écart.`
+        ? followFailureReason(state, rider, current, affinity, currentFatigue)
         : choice === "conserve"
-          ? `Le groupe accélère pendant que Julian temporise.`
-          : `L'effort collectif coûte du placement à Julian.`;
+          ? `Le groupe accélère pendant que Julian temporise : son écart augmente malgré l'énergie économisée.`
+          : `L'effort collectif coûte du placement à Julian, mais améliore la situation de ${state.teamMateName ?? "son équipier"}.`;
   const consequence = `${advantageChange >= 0 ? "+" : ""}${advantageChange.toFixed(2)} avantage · ${fatigueCost >= 0 ? "+" : ""}${fatigueCost.toFixed(1)} fatigue — ${reason}`;
   return {
     ...state,
@@ -929,7 +968,7 @@ function attackFailureReason(
   affinity: number,
   fatigue: number,
 ) {
-  if (state.gapSeconds >= 35 || state.group === "Groupe attardé")
+  if (state.gapSeconds >= 35 || isDroppedGroup(state.group))
     return "Attaque ratée — le groupe était trop loin au moment de l’effort.";
   if (fatigue >= 70 && state.position > 18)
     return "Attaque ratée — fatigue trop élevée et position défavorable.";
@@ -943,6 +982,24 @@ function attackFailureReason(
   if (state.position > 20)
     return "Attaque ratée — position trop défavorable pour atteindre l’avant du groupe.";
   return "Attaque ratée — le rythme du groupe neutralise l’effort de Julian.";
+}
+
+function followFailureReason(
+  state: InteractiveRaceState,
+  rider: Rider,
+  phase: InteractiveRacePhase,
+  affinity: number,
+  fatigue: number,
+) {
+  if (state.gapSeconds >= 35 || isDroppedGroup(state.group))
+    return "Julian suit le mouvement, mais son groupe est trop loin pour revenir complètement au contact.";
+  if (fatigue >= 70)
+    return "Julian suit le mouvement, mais sa fatigue ne lui permet pas de tenir complètement le rythme.";
+  if (affinity < 55)
+    return `Julian suit le mouvement, mais son déficit en ${statLabels[phase.keyStat]} ne lui permet pas de tenir complètement le rythme.`;
+  if (state.position > 20)
+    return "Julian suit le mouvement, mais sa position défavorable ouvre un petit écart.";
+  return `Julian suit le mouvement, mais son niveau en ${riderQuality(rider, phase.keyStat)} ne suffit pas face à cette accélération.`;
 }
 
 function updateGroups(
@@ -967,8 +1024,7 @@ function updateGroups(
 }
 
 export function interactiveFinalModifier(state: InteractiveRaceState) {
-  const positional = ((state.startPosition ?? 18) - state.position) * 0.28;
-  return clamp((state.performanceDelta ?? 0) + positional, -6, 6);
+  return clamp(state.performanceDelta ?? 0, -6, 6);
 }
 
 export function interactiveTendency(state: InteractiveRaceState) {

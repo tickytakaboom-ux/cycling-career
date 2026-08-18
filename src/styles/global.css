@@ -1648,3 +1648,13 @@ p {
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
+.result .event-decision {
+  margin-top: 14px;
+  color: #20271e;
+  font-weight: 800;
+}
+.result .event-detail {
+  margin: 3px 0 3px 12px;
+  color: #50594d;
+  line-height: 1.35;
+}

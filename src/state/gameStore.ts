@@ -682,18 +682,26 @@ export function finishInteractiveRace(game: GameState): GameState {
   const result = {
     ...finished.lastResult,
     events: [
-      "Décisions",
-      ...active.log.map(
-        (entry) => `Km ${entry.km} — ${entry.text.split(" — ")[0]}`,
-      ),
-      "Conséquences",
-      ...active.log.map(
-        (entry) =>
-          `Km ${entry.km} — ${entry.consequence} (${entry.positionBefore}e → ${entry.positionAfter}e)`,
-      ),
-      ...(active.teamMateName && active.teamSupport > 0
+      "Décisions et conséquences",
+      ...active.log.flatMap((entry) => {
+        const separator = entry.consequence.indexOf(" — ");
+        const impact =
+          separator >= 0
+            ? entry.consequence.slice(0, separator)
+            : entry.consequence;
+        const explanation =
+          separator >= 0 ? entry.consequence.slice(separator + 3) : undefined;
+        return [
+          `Km ${entry.km} — ${entry.text.split(" — ")[0]}`,
+          `↳ ${entry.positionBefore}e → ${entry.positionAfter}e`,
+          `↳ ${impact}`,
+          `↳ ${explanation ?? entry.text.split(" — ").slice(1).join(" — ")}`,
+        ];
+      }),
+      ...(active.teamMateId && active.teamSupport > 0
         ? [
-            `Travail collectif : ${active.teamMateName} reçoit un bonus de ${active.teamSupport.toFixed(1)}.`,
+            "Impact collectif",
+            `${active.teamMateName ?? "L'équipier"} gagne du terrain grâce au travail de Julian (bonus +${active.teamSupport.toFixed(2)}).`,
           ]
         : []),
       ...finished.lastResult.events,

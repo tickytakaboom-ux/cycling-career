@@ -853,10 +853,10 @@ function ResultToast({
         <b>{result.score}</b>
         <small>PERFORMANCE / 100</small>
       </div>
-      {result.events.map((event) => (
+      {result.events.map((event, index) => (
         <p
-          className={`event ${event === "Décisions" || event === "Conséquences" ? "event-heading" : ""}`}
-          key={event}
+          className={`event ${event === "Décisions" || event === "Conséquences" || event === "Décisions et conséquences" || event === "Impact collectif" ? "event-heading" : event.startsWith("Km ") ? "event-decision" : event.startsWith("↳") ? "event-detail" : ""}`}
+          key={`${index}-${event}`}
         >
           {event}
         </p>
