@@ -652,8 +652,6 @@ export function beginInteractiveRace(
     `${game.careerId}-${game.season.year}`,
     teamMate,
   );
-  const projection = projectInteractiveRaceResult(game, activeRace);
-  const projectedRace = alignInteractiveProjection(activeRace, projection);
   const field = createRaceField(target, game.team.level);
   const participants = synchronizeParticipantSituations(
     createInteractiveParticipants(
@@ -662,12 +660,12 @@ export function beginInteractiveRace(
       game.team.roster,
       target.selectedTeamMateIds ?? [],
     ),
-    projectedRace,
+    activeRace,
   );
   return {
     ...game,
     activeRace: {
-      ...projectedRace,
+      ...activeRace,
       participants,
     },
     notice: `Départ de ${target.name}.`,
@@ -685,7 +683,7 @@ export function chooseInteractiveRaceAction(
     choice,
   );
   const projection = projectInteractiveRaceResult(game, activeRace);
-  const projectedRace = alignInteractiveProjection(activeRace, projection);
+  const projectedRace = alignInteractiveTrajectory(activeRace, projection);
   return {
     ...game,
     activeRace: {
@@ -717,35 +715,56 @@ export function projectInteractiveRaceResult(
   );
 }
 
-function alignInteractiveProjection(
+function alignInteractiveTrajectory(
   active: NonNullable<GameState["activeRace"]>,
   projection: RaceResult | undefined,
 ) {
   if (!projection) return active;
-  const gapSeconds =
+  const projectedGap =
     projection.position === 1
       ? 0
       : Number(projection.gap.match(/\d+/)?.[0] ?? active.gapSeconds);
+  const progress = active.phaseIndex / active.phases.length;
+  const finished = active.phaseIndex >= active.phases.length;
+  const convergence = Math.min(0.72, progress * progress * 0.8);
+  const position = finished
+    ? projection.position
+    : Math.min(
+        31,
+        Math.max(
+          1,
+          Math.round(
+            active.position * (1 - convergence) +
+              projection.position * convergence,
+          ),
+        ),
+      );
+  const gapSeconds = finished
+    ? projectedGap
+    : Math.max(
+        0,
+        Math.round(
+          active.gapSeconds * (1 - convergence) + projectedGap * convergence,
+        ),
+      );
   const group =
     active.raceTerrain === "chrono"
       ? "Effort individuel"
-      : projection.position <= 5
+      : position <= 5
         ? "Groupe de tête"
-        : projection.position <= 20
+        : position <= 20
           ? "Peloton principal"
-          : projection.position <= 27
+          : position <= 27
             ? "Groupe poursuivant"
             : "Retardataires";
   const log = active.log.map((entry, index) =>
     index === active.log.length - 1
-      ? { ...entry, positionAfter: projection.position }
+      ? { ...entry, positionAfter: position }
       : entry,
   );
   return {
     ...active,
-    position: projection.position,
-    startPosition:
-      active.phaseIndex === 0 ? projection.position : active.startPosition,
+    position,
     group,
     gapSeconds,
     log,

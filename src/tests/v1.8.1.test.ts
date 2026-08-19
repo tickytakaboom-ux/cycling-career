@@ -36,7 +36,7 @@ const julian = () =>
 const availableGame = () => advanceToNextRace(createGame(julian()));
 
 describe("synchronisation V1.8.1", () => {
-  it("affiche après chaque choix la projection déterministe du résultat final", () => {
+  it("conserve la projection déterministe et la rejoint au dernier moment", () => {
     let game = availableGame();
     const race = game.calendar.find((item) => item.status === "available")!;
     game = beginInteractiveRace(game, race.id, "normal");
@@ -47,12 +47,14 @@ describe("synchronisation V1.8.1", () => {
     while (game.activeRace!.phaseIndex < game.activeRace!.phases.length) {
       game = chooseInteractiveRaceAction(game, "follow");
       const projection = projectInteractiveRaceResult(game, game.activeRace!)!;
-      expect(game.activeRace!.position).toBe(projection.position);
       expect(game.activeRace!.seed).toBe(seed);
       expect(projection.breakdown.variance).toBe(variance);
     }
 
     const finalInteractivePosition = game.activeRace!.position;
+    expect(finalInteractivePosition).toBe(
+      projectInteractiveRaceResult(game, game.activeRace!)!.position,
+    );
     const finished = finishInteractiveRace(game);
     expect(finished.lastResult!.position).toBe(finalInteractivePosition);
   });

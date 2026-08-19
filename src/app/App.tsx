@@ -1308,13 +1308,6 @@ function InteractiveRaceModal({
             {raceData.terrain !== "chrono" && (
               <CurrentGroupPanel state={state} />
             )}
-            {state.log.length > 0 && (
-              <div className="race-last-event">
-                <span className="eyebrow">DERNIÈRE DÉCISION</span>
-                <b>{state.log.at(-1)?.text}</b>
-                <span>{state.log.at(-1)?.consequence}</span>
-              </div>
-            )}
           </div>
           <div className="interactive-race-actions">
             {current ? (
@@ -1371,6 +1364,13 @@ function InteractiveRaceModal({
                   CALCULER LE RÉSULTAT <Flag />
                 </button>
               </section>
+            )}
+            {state.log.length > 0 && (
+              <div className="race-last-event">
+                <span className="eyebrow">DERNIÈRE DÉCISION</span>
+                <b>{state.log.at(-1)?.text}</b>
+                <span>{state.log.at(-1)?.consequence}</span>
+              </div>
             )}
           </div>
         </div>

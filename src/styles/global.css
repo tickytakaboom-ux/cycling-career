@@ -1507,11 +1507,14 @@ p {
 }
 .interactive-back {
   align-items: center;
-  padding: 18px;
+  padding: clamp(6px, 2vh, 18px);
 }
 .interactive-race {
-  width: min(1120px, 96vw);
-  max-height: calc(100dvh - 36px);
+  width: 95vw;
+  height: 94dvh;
+  max-width: none;
+  max-height: 94dvh;
+  padding: clamp(22px, 2.4vw, 38px);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -1581,8 +1584,8 @@ p {
 }
 .interactive-race-layout {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(330px, 2fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(420px, 1fr);
+  gap: clamp(22px, 2.5vw, 42px);
   align-items: start;
 }
 .interactive-race-context,
@@ -1593,7 +1596,7 @@ p {
   .interactive-race-actions {
     position: sticky;
     top: 82px;
-    max-height: calc(100dvh - 150px);
+    max-height: calc(94dvh - 112px);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
@@ -1621,7 +1624,7 @@ p {
 }
 .stage-profile {
   position: relative;
-  height: 130px;
+  height: clamp(150px, 23vh, 230px);
   margin: 0 16px 4px;
   overflow: hidden;
   border-bottom: 1px solid var(--line);
@@ -1824,19 +1827,21 @@ p {
   font-size: 0.62rem;
 }
 .race-moment {
-  padding: 18px;
+  padding: clamp(20px, 2vw, 30px);
   border-left: 4px solid var(--lime);
   background: rgba(201, 255, 61, 0.06);
 }
 .race-choices {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  margin-top: 16px;
+  gap: 14px;
+  margin-top: 18px;
 }
 .race-choices button {
   display: grid;
   gap: 6px;
-  padding: 15px;
+  min-height: 150px;
+  padding: clamp(16px, 1.5vw, 24px);
   text-align: left;
 }
 .race-choices small,
@@ -1891,6 +1896,12 @@ p {
   }
 }
 @media (max-width: 700px) {
+  .interactive-race {
+    width: calc(100vw - 12px);
+    height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px);
+    padding: 16px;
+  }
   .race-status-bar,
   .race-choices {
     grid-template-columns: 1fr 1fr;
@@ -1936,6 +1947,7 @@ p {
     padding: 13px 15px;
   }
   .race-choices button {
+    min-height: 118px;
     padding: 11px;
   }
 }
