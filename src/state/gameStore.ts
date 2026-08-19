@@ -326,6 +326,15 @@ export function migrateGame(saved: GameState): GameState {
       level: careerLevel(saved.rider.reputation, saved.rider.experience),
     },
     calendar: updateStatuses(calendar, currentDate),
+    activeRace: saved.activeRace
+      ? {
+          ...saved.activeRace,
+          raceTerrain:
+            saved.activeRace.raceTerrain ??
+            calendar.find((race) => race.id === saved.activeRace?.raceId)
+              ?.terrain,
+        }
+      : undefined,
   };
 }
 export function loadGame(): GameState | undefined {
@@ -643,6 +652,8 @@ export function beginInteractiveRace(
     `${game.careerId}-${game.season.year}`,
     teamMate,
   );
+  const projection = projectInteractiveRaceResult(game, activeRace);
+  const projectedRace = alignInteractiveProjection(activeRace, projection);
   const field = createRaceField(target, game.team.level);
   const participants = synchronizeParticipantSituations(
     createInteractiveParticipants(
@@ -651,12 +662,12 @@ export function beginInteractiveRace(
       game.team.roster,
       target.selectedTeamMateIds ?? [],
     ),
-    activeRace,
+    projectedRace,
   );
   return {
     ...game,
     activeRace: {
-      ...activeRace,
+      ...projectedRace,
       participants,
     },
     notice: `Départ de ${target.name}.`,
@@ -673,15 +684,71 @@ export function chooseInteractiveRaceAction(
     game.rider,
     choice,
   );
+  const projection = projectInteractiveRaceResult(game, activeRace);
+  const projectedRace = alignInteractiveProjection(activeRace, projection);
   return {
     ...game,
     activeRace: {
-      ...activeRace,
+      ...projectedRace,
       participants: synchronizeParticipantSituations(
-        activeRace.participants ?? [],
-        activeRace,
+        projectedRace.participants ?? [],
+        projectedRace,
       ),
     },
+  };
+}
+
+export function projectInteractiveRaceResult(
+  game: GameState,
+  active: NonNullable<GameState["activeRace"]>,
+) {
+  const target = game.calendar.find((item) => item.id === active.raceId);
+  if (!target) return undefined;
+  return simulateRace(
+    {
+      ...game.rider,
+      fatigue: Math.min(100, game.rider.fatigue + active.fatigueDelta),
+    },
+    createRaceField(target, game.team.level),
+    target,
+    active.strategy,
+    seededRandom(active.seed),
+    interactiveFinalModifier(active),
+  );
+}
+
+function alignInteractiveProjection(
+  active: NonNullable<GameState["activeRace"]>,
+  projection: RaceResult | undefined,
+) {
+  if (!projection) return active;
+  const gapSeconds =
+    projection.position === 1
+      ? 0
+      : Number(projection.gap.match(/\d+/)?.[0] ?? active.gapSeconds);
+  const group =
+    active.raceTerrain === "chrono"
+      ? "Effort individuel"
+      : projection.position <= 5
+        ? "Groupe de tête"
+        : projection.position <= 20
+          ? "Peloton principal"
+          : projection.position <= 27
+            ? "Groupe poursuivant"
+            : "Retardataires";
+  const log = active.log.map((entry, index) =>
+    index === active.log.length - 1
+      ? { ...entry, positionAfter: projection.position }
+      : entry,
+  );
+  return {
+    ...active,
+    position: projection.position,
+    startPosition:
+      active.phaseIndex === 0 ? projection.position : active.startPosition,
+    group,
+    gapSeconds,
+    log,
   };
 }
 

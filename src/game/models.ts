@@ -243,6 +243,7 @@ export interface InteractiveRaceParticipant {
 }
 export interface InteractiveRaceState {
   raceId: string;
+  raceTerrain?: Terrain;
   seed: number;
   strategy: RaceStrategy;
   phaseIndex: number;

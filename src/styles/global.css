@@ -1575,7 +1575,9 @@ p {
   top: -24px;
   z-index: 5;
   padding-block: 10px;
-  background: var(--surface);
+  border-bottom: 1px solid #353a36;
+  background: #151816;
+  box-shadow: 0 8px 14px rgba(5, 7, 6, 0.28);
 }
 .interactive-race-layout {
   display: grid;
@@ -1586,6 +1588,15 @@ p {
 .interactive-race-context,
 .interactive-race-actions {
   min-width: 0;
+}
+@media (min-width: 701px) {
+  .interactive-race-actions {
+    position: sticky;
+    top: 82px;
+    max-height: calc(100dvh - 150px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 .race-situation-map {
   overflow: hidden;
@@ -1681,7 +1692,7 @@ p {
 }
 .group-rider-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 6px;
 }
 .group-rider {
@@ -1706,9 +1717,7 @@ p {
 }
 .group-rider b,
 .group-rider small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .group-rider small {
   color: var(--muted);
@@ -1717,6 +1726,22 @@ p {
 .group-rider.player {
   border: 1px solid rgba(201, 255, 61, 0.25);
   background: rgba(201, 255, 61, 0.07);
+}
+.group-rider-details {
+  margin-top: 8px;
+}
+.group-rider-details summary {
+  cursor: pointer;
+  color: var(--lime);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.group-rider-details[open] summary {
+  margin-bottom: 8px;
+}
+.group-rider-list.full {
+  max-height: 230px;
+  overflow-y: auto;
 }
 .race-groups {
   position: relative;
@@ -1729,6 +1754,18 @@ p {
     rgba(255, 255, 255, 0.035),
     rgba(255, 255, 255, 0.01)
   );
+}
+.time-trial-note {
+  display: grid;
+  gap: 3px;
+  margin: 12px 16px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--lime);
+  background: rgba(201, 255, 61, 0.06);
+}
+.time-trial-note span {
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 .race-groups::before {
   content: "";
@@ -1890,6 +1927,16 @@ p {
   }
   .race-status-bar {
     margin-block: 6px 10px;
+  }
+  .interactive-race-actions {
+    top: 70px;
+    max-height: calc(100dvh - 112px);
+  }
+  .race-moment {
+    padding: 13px 15px;
+  }
+  .race-choices button {
+    padding: 11px;
   }
 }
 .event-heading {

@@ -243,7 +243,7 @@ const terrainMoments: Record<Terrain, Moment[]> = {
       "start",
       0.03,
       "Rampe de départ",
-      "Il faut trouver le bon rythme immédiatement.",
+      "Trouver immédiatement le bon rythme sans gaspiller les premières réserves.",
       "timeTrial",
       0.45,
       "steady",
@@ -251,8 +251,8 @@ const terrainMoments: Record<Terrain, Moment[]> = {
     [
       "difficulty",
       0.18,
-      "Premier intermédiaire",
-      "L'allure doit rester maîtrisée.",
+      "Premier secteur",
+      "Le vent permet de maintenir une allure élevée. Il faut exploiter l'avantage sans dépasser son seuil.",
       "timeTrial",
       0.55,
       "steady",
@@ -261,7 +261,7 @@ const terrainMoments: Record<Terrain, Moment[]> = {
       "difficulty",
       0.36,
       "Secteur roulant",
-      "La position aérodynamique devient essentielle.",
+      "La position aérodynamique et l'endurance permettent de stabiliser la vitesse.",
       "endurance",
       0.55,
       "steady",
@@ -269,26 +269,26 @@ const terrainMoments: Record<Terrain, Moment[]> = {
     [
       "feed",
       0.54,
-      "Mi-course",
-      "Une mauvaise gestion se paiera dans le final.",
-      "tactics",
+      "Montée",
+      "La pente augmente. Il faut gérer l'effort pour ne pas exploser dans la seconde moitié.",
+      "resistance",
       0.45,
       "steady",
     ],
     [
       "difficulty",
       0.7,
-      "Secteur exposé",
-      "Le vent perturbe le rythme.",
-      "weather",
+      "Descente technique",
+      "La descente offre du temps à gagner, mais prendre davantage de risques augmente la fatigue.",
+      "descending",
       0.7,
       "technical",
     ],
     [
       "finale",
       0.86,
-      "Dernier intermédiaire",
-      "Il faut décider quand accélérer.",
+      "Dernier secteur",
+      "Les derniers kilomètres sont décisifs. Les réserves peuvent maintenant être utilisées.",
       "resistance",
       0.78,
       "acceleration",
@@ -471,20 +471,22 @@ export function startInteractiveRace(
     : undefined;
   return {
     raceId: race.id,
+    raceTerrain: race.terrain,
     seed,
     strategy,
     phaseIndex: 0,
     phases: createRacePhases(race),
     position: startPosition,
     startPosition,
-    group: "Peloton principal",
-    gapSeconds: 6,
+    group:
+      race.terrain === "chrono" ? "Effort individuel" : "Peloton principal",
+    gapSeconds: race.terrain === "chrono" ? 0 : 6,
     fatigueDelta: 0,
     performanceDelta: 0,
-    groups: initialGroups(),
-    teamMateId: teamMate?.id,
-    teamMateName: teamMate?.name,
-    ...teamMateSituation,
+    groups: race.terrain === "chrono" ? [] : initialGroups(),
+    teamMateId: race.terrain === "chrono" ? undefined : teamMate?.id,
+    teamMateName: race.terrain === "chrono" ? undefined : teamMate?.name,
+    ...(race.terrain === "chrono" ? {} : teamMateSituation),
     teamSupport: 0,
     choices: [],
     log: [],
@@ -538,6 +540,13 @@ function choiceLabel(
   choice: InteractiveRaceChoice,
   state: InteractiveRaceState,
 ) {
+  if (state.raceTerrain === "chrono")
+    return {
+      attack: "Accélérer",
+      follow: "Maintenir le rythme",
+      conserve: "Gérer l'effort",
+      teamwork: "Prendre des risques",
+    }[choice];
   return choice === "teamwork"
     ? `Aider ${state.teamMateName ?? "un équipier"}`
     : choiceLabels[choice];
@@ -569,6 +578,7 @@ export function selectInteractiveTeamMate(
   roster: TeamMate[],
   selectedIds: string[],
 ) {
+  if (race.terrain === "chrono") return undefined;
   const selected = new Set(selectedIds);
   const roleValue: Record<TeamMate["role"], number> = {
     Leader: 8,
@@ -724,11 +734,68 @@ function joinContext(...parts: Array<string | false | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
+function chronoChoiceDescriptions(
+  state: InteractiveRaceState,
+  rider: Rider,
+): Record<InteractiveRaceChoice, InteractiveChoiceDescription> {
+  const phase = state.phases[state.phaseIndex];
+  const fatigue = rider.fatigue + state.fatigueDelta;
+  const quality = riderQuality(rider, phase?.keyStat ?? "timeTrial");
+  const tired = fatigue >= 65;
+  const guidance = currentRaceGuidance(state);
+  const phaseFocus = `Ce secteur sollicite surtout ${quality}.`;
+  return {
+    follow: {
+      label: "Maintenir le rythme",
+      description: joinContext(
+        phaseFocus,
+        tired
+          ? "La fatigue rend l'allure cible difficile à conserver jusqu'au prochain intermédiaire."
+          : "Julian cherche une puissance régulière sans dépasser son seuil.",
+        guidance,
+      ),
+      indicators: "Allure = · Fatigue ↑ · Risque modéré",
+    },
+    attack: {
+      label: "Accélérer",
+      description: joinContext(
+        phaseFocus,
+        tired
+          ? `Avec ${fatigue.toFixed(0)} de fatigue cumulée, augmenter la puissance peut coûter cher dans le final.`
+          : "Une hausse de puissance peut faire gagner du temps, mais entame rapidement les réserves.",
+        guidance,
+      ),
+      indicators: "Temps potentiel ↑↑ · Fatigue ↑↑ · Risque élevé",
+    },
+    conserve: {
+      label: "Gérer l'effort",
+      description: joinContext(
+        phaseFocus,
+        "Julian réduit légèrement l'intensité pour préserver la seconde moitié du parcours.",
+        guidance,
+      ),
+      indicators: "Réserves ↑ · Allure ↓ · Risque faible",
+    },
+    teamwork: {
+      label: "Prendre des risques",
+      description: joinContext(
+        phaseFocus,
+        phase?.situation === "technical"
+          ? "Une trajectoire plus agressive peut faire gagner du temps, avec un risque accru d'erreur."
+          : "Julian pousse au-delà de son rythme prévu pour tenter de gagner quelques secondes.",
+        guidance,
+      ),
+      indicators: "Temps potentiel ↑ · Fatigue ↑ · Risque technique",
+    },
+  };
+}
+
 export function interactiveChoiceDescriptions(
   state: InteractiveRaceState,
   rider: Rider,
   race: Race,
 ): Record<InteractiveRaceChoice, InteractiveChoiceDescription> {
+  if (race.terrain === "chrono") return chronoChoiceDescriptions(state, rider);
   const phase = state.phases[state.phaseIndex];
   const fatigue = rider.fatigue + state.fatigueDelta;
   const affinity = phase ? terrainAffinity(rider, phase) : 50;
@@ -863,12 +930,19 @@ export function resolveInteractivePhase(
 ): InteractiveRaceState {
   const current = state.phases[state.phaseIndex];
   if (!current) return state;
-  if (choice === "teamwork" && state.teamMateAccessible === false) return state;
+  const isTimeTrial = state.raceTerrain === "chrono";
+  if (
+    !isTimeTrial &&
+    choice === "teamwork" &&
+    state.teamMateAccessible === false
+  )
+    return state;
   const roll = seededRandom(hash(`${state.seed}-${current.id}-${choice}`))();
   const currentFatigue = rider.fatigue + state.fatigueDelta;
   const affinity = terrainAffinity(rider, current);
-  const groupAdjustment =
-    state.group === "Groupe poursuivant"
+  const groupAdjustment = isTimeTrial
+    ? 0
+    : state.group === "Groupe poursuivant"
       ? choice === "follow"
         ? 5
         : choice === "attack"
@@ -878,19 +952,24 @@ export function resolveInteractivePhase(
         ? 4
         : 0;
   const situationAdjustment =
-    current.situation === "acceleration" && choice === "follow"
+    isTimeTrial && current.situation === "technical" && choice === "teamwork"
       ? 5
-      : current.situation === "final" && choice === "attack"
-        ? 3
-        : current.situation === "team" && choice === "teamwork"
-          ? 7
-          : 0;
+      : current.situation === "acceleration" && choice === "follow"
+        ? 5
+        : current.situation === "final" && choice === "attack"
+          ? 3
+          : current.situation === "team" && choice === "teamwork"
+            ? 7
+            : 0;
   const actionDifficulty =
     { attack: 57, follow: 51, conserve: 43, teamwork: 49 }[choice] +
     current.intensity * (choice === "attack" ? 5 : 2);
+  const executionStat = isTimeTrial
+    ? (rider.stats.timeTrial + rider.stats.resistance) / 2
+    : rider.stats.tactics;
   const evaluation =
     affinity * 0.72 +
-    rider.stats.tactics * 0.18 +
+    executionStat * 0.18 +
     rider.form * 0.12 -
     currentFatigue * 0.13 +
     (state.performanceDelta ?? 0) * 2 +
@@ -954,8 +1033,8 @@ export function resolveInteractivePhase(
     -5,
     5,
   );
-  const group = groupForPosition(position);
-  const targetGap = gapForPosition(position);
+  const group = isTimeTrial ? "Effort individuel" : groupForPosition(position);
+  const targetGap = isTimeTrial ? state.gapSeconds : gapForPosition(position);
   const choiceGapEffect =
     choice === "attack"
       ? success
@@ -995,28 +1074,35 @@ export function resolveInteractivePhase(
   );
   const gapChange = gapSeconds - state.gapSeconds;
   const teamImpact =
-    choice === "teamwork" && state.teamMateId ? (success ? 0.8 : 0.35) : 0;
+    !isTimeTrial && choice === "teamwork" && state.teamMateId
+      ? success
+        ? 0.8
+        : 0.35
+      : 0;
   const teamSupport = clamp((state.teamSupport ?? 0) + teamImpact, 0, 4);
   const mateRoll = seededRandom(
     hash(`${state.seed}-${current.id}-${state.teamMateId ?? "none"}-mate`),
   )();
-  const teamMatePosition = state.teamMatePosition
-    ? clamp(state.teamMatePosition + Math.round((mateRoll - 0.5) * 4), 1, 31)
-    : undefined;
-  const teamMateGroup = teamMatePosition
-    ? groupForPosition(teamMatePosition)
-    : undefined;
-  const teamMateGapSeconds = teamMatePosition
-    ? Math.max(
-        0,
-        Math.round(
-          (state.teamMateGapSeconds ?? gapForPosition(teamMatePosition)) *
-            0.55 +
-            gapForPosition(teamMatePosition) * 0.45 +
-            (mateRoll - 0.5) * 4,
-        ),
-      )
-    : undefined;
+  const teamMatePosition =
+    !isTimeTrial && state.teamMatePosition
+      ? clamp(state.teamMatePosition + Math.round((mateRoll - 0.5) * 4), 1, 31)
+      : undefined;
+  const teamMateGroup =
+    !isTimeTrial && teamMatePosition
+      ? groupForPosition(teamMatePosition)
+      : undefined;
+  const teamMateGapSeconds =
+    !isTimeTrial && teamMatePosition
+      ? Math.max(
+          0,
+          Math.round(
+            (state.teamMateGapSeconds ?? gapForPosition(teamMatePosition)) *
+              0.55 +
+              gapForPosition(teamMatePosition) * 0.45 +
+              (mateRoll - 0.5) * 4,
+          ),
+        )
+      : undefined;
   const teamMateAccessible = Boolean(
     teamMateGroup &&
     teamMateGapSeconds !== undefined &&
@@ -1036,27 +1122,48 @@ export function resolveInteractivePhase(
       : rider.form >= 75
         ? " Sa très bonne forme lui apporte la marge nécessaire."
         : "";
-  const reason = success
+  const chronoReason = success
     ? choice === "attack"
-      ? outcome === "clear"
-        ? `Julian exploite ${riderQuality(rider, current.keyStat)} pour créer une accélération nette${gapChange < 0 ? ` et réduit son écart de ${-gapChange} s` : " et améliore son placement"}.${favorableContext}`
-        : `Julian prend quelques mètres grâce à ${riderQuality(rider, current.keyStat)}, mais l'attaque reste fragile.${favorableContext}`
+      ? `Julian augmente sa puissance grâce à ${riderQuality(rider, current.keyStat)} et gagne du temps sur ce secteur.`
       : choice === "follow"
-        ? outcome === "clear"
-          ? `Son niveau en ${riderQuality(rider, current.keyStat)} lui permet de suivre ${current.situation === "acceleration" ? "l'accélération" : "le rythme"} sans rupture.${favorableContext}`
-          : `Julian reste au contact grâce à ${riderQuality(rider, current.keyStat)}, mais avec difficulté et sans gagner nettement du terrain.${favorableContext}`
+        ? `Julian maintient une allure régulière grâce à ${riderQuality(rider, current.keyStat)} sans dépasser son seuil.`
         : choice === "conserve"
-          ? current.situation === "steady" || current.situation === "team"
-            ? `Julian récupère pendant que le groupe ralentit${gapChange <= 0 ? " et son écart se stabilise" : `, même si l'écart augmente de ${gapChange} s`}.`
-            : `Julian préserve ses réserves, mais le rythme de la course lui coûte ${Math.max(0, gapChange)} s et un peu d'avantage.`
-          : `${state.teamMateName ?? "L'équipier"} gagne du terrain grâce au travail de Julian.`
+          ? "Julian maîtrise son intensité et préserve des réserves pour la suite du contre-la-montre."
+          : current.situation === "technical"
+            ? `Julian prend des trajectoires plus agressives et exploite ${riderQuality(rider, current.keyStat)} pour gagner du temps.`
+            : "Julian dépasse son rythme prévu et gagne quelques secondes, au prix d'un effort supplémentaire."
     : choice === "attack"
-      ? failedAttackReason
+      ? `L'accélération est trop ambitieuse : Julian manque de marge en ${riderQuality(rider, current.keyStat)} pour tenir cette puissance.`
       : choice === "follow"
-        ? followFailureReason(state, rider, current, affinity, currentFatigue)
+        ? `Julian tente de maintenir son allure, mais ${riderQuality(rider, current.keyStat)} et la fatigue actuelle ne suffisent pas complètement.`
         : choice === "conserve"
-          ? `Le groupe accélère pendant que Julian temporise : son écart augmente de ${Math.max(0, gapChange)} s malgré l'énergie économisée.`
-          : `L'effort collectif coûte du placement à Julian, mais améliore la situation de ${state.teamMateName ?? "son équipier"}.`;
+          ? "Julian réduit trop son intensité et concède davantage de temps que prévu sur ce secteur."
+          : current.situation === "technical"
+            ? "La prise de risque perturbe la trajectoire de Julian et ne lui permet pas de gagner du temps."
+            : "Julian dépasse son seuil trop tôt et paie immédiatement cet effort supplémentaire.";
+  const reason = isTimeTrial
+    ? chronoReason
+    : success
+      ? choice === "attack"
+        ? outcome === "clear"
+          ? `Julian exploite ${riderQuality(rider, current.keyStat)} pour créer une accélération nette${gapChange < 0 ? ` et réduit son écart de ${-gapChange} s` : " et améliore son placement"}.${favorableContext}`
+          : `Julian prend quelques mètres grâce à ${riderQuality(rider, current.keyStat)}, mais l'attaque reste fragile.${favorableContext}`
+        : choice === "follow"
+          ? outcome === "clear"
+            ? `Son niveau en ${riderQuality(rider, current.keyStat)} lui permet de suivre ${current.situation === "acceleration" ? "l'accélération" : "le rythme"} sans rupture.${favorableContext}`
+            : `Julian reste au contact grâce à ${riderQuality(rider, current.keyStat)}, mais avec difficulté et sans gagner nettement du terrain.${favorableContext}`
+          : choice === "conserve"
+            ? current.situation === "steady" || current.situation === "team"
+              ? `Julian récupère pendant que le groupe ralentit${gapChange <= 0 ? " et son écart se stabilise" : `, même si l'écart augmente de ${gapChange} s`}.`
+              : `Julian préserve ses réserves, mais le rythme de la course lui coûte ${Math.max(0, gapChange)} s et un peu d'avantage.`
+            : `${state.teamMateName ?? "L'équipier"} gagne du terrain grâce au travail de Julian.`
+      : choice === "attack"
+        ? failedAttackReason
+        : choice === "follow"
+          ? followFailureReason(state, rider, current, affinity, currentFatigue)
+          : choice === "conserve"
+            ? `Le groupe accélère pendant que Julian temporise : son écart augmente de ${Math.max(0, gapChange)} s malgré l'énergie économisée.`
+            : `L'effort collectif coûte du placement à Julian, mais améliore la situation de ${state.teamMateName ?? "son équipier"}.`;
   const consequence = `${advantageChange >= 0 ? "+" : ""}${advantageChange.toFixed(2)} avantage · ${fatigueCost >= 0 ? "+" : ""}${fatigueCost.toFixed(1)} fatigue — ${reason}`;
   return {
     ...state,
@@ -1071,7 +1178,9 @@ export function resolveInteractivePhase(
     teamMateGroup,
     teamMateGapSeconds,
     teamMateAccessible,
-    groups: updateGroups(state.groups ?? initialGroups(), current, roll),
+    groups: isTimeTrial
+      ? []
+      : updateGroups(state.groups ?? initialGroups(), current, roll),
     choices: [...state.choices, choice],
     log: [
       ...state.log,

@@ -1127,28 +1127,37 @@ function RaceSituationMap({
           JS
         </div>
       </div>
-      <div className="race-groups" aria-label="Groupes en course">
-        {(state.groups ?? []).map((group) => (
-          <div
-            className={`race-group ${group.kind}`}
-            key={group.id}
-            style={{
-              left: `${Math.min(97, Math.max(3, progress + (state.gapSeconds - group.gapSeconds) / 2))}%`,
-            }}
-          >
+      {race.terrain === "chrono" ? (
+        <div className="time-trial-note">
+          <b>Contre-la-montre individuel</b>
+          <span>Julian roule seul contre le chronomètre.</span>
+        </div>
+      ) : (
+        <div className="race-groups" aria-label="Groupes en course">
+          {(state.groups ?? []).map((group) => (
+            <div
+              className={`race-group ${group.kind}`}
+              key={group.id}
+              style={{
+                left: `${Math.min(97, Math.max(3, progress + (state.gapSeconds - group.gapSeconds) / 2))}%`,
+              }}
+            >
+              <i />
+              <span>{group.label}</span>
+              <small>
+                {group.gapSeconds ? `+${group.gapSeconds} s` : "Tête"}
+              </small>
+            </div>
+          ))}
+          <div className="race-group player" style={{ left: `${progress}%` }}>
             <i />
-            <span>{group.label}</span>
+            <span>Julian</span>
             <small>
-              {group.gapSeconds ? `+${group.gapSeconds} s` : "Tête"}
+              {state.gapSeconds ? `+${state.gapSeconds} s` : "Tête"}
             </small>
           </div>
-        ))}
-        <div className="race-group player" style={{ left: `${progress}%` }}>
-          <i />
-          <span>Julian</span>
-          <small>{state.gapSeconds ? `+${state.gapSeconds} s` : "Tête"}</small>
         </div>
-      </div>
+      )}
       <div className="race-track" aria-label="Progression de la course">
         <div className="race-track-line" />
         {state.phases.map((item, index) => (
@@ -1181,10 +1190,49 @@ function CurrentGroupPanel({
   const riders = participantsNearPosition(
     state.participants,
     state.position,
-    5,
+    99,
     state.group,
-  );
+  ).sort((a, b) => {
+    const importance = (rider: typeof a) =>
+      rider.source === "teamMate"
+        ? 0
+        : rider.favoriteTier === "favorite"
+          ? 1
+          : rider.favoriteTier === "contender"
+            ? 2
+            : rider.favoriteTier === "outsider"
+              ? 3
+              : 4;
+    return (
+      importance(a) - importance(b) ||
+      Math.abs((a.situationPosition ?? a.expectedPosition) - state.position) -
+        Math.abs((b.situationPosition ?? b.expectedPosition) - state.position)
+    );
+  });
+  const visibleRiders = riders.slice(0, 3);
   const favorites = riders.filter((rider) => rider.favoriteTier).length;
+  const riderLine = (rider: (typeof riders)[number]) => (
+    <div className="group-rider" key={rider.riderId}>
+      <span>
+        {rider.source === "teamMate" ? "ÉQ" : rider.favoriteTier ? "★" : "·"}
+      </span>
+      <div>
+        <b>{rider.name}</b>
+        <small>
+          {profileLabels[rider.profile]}
+          {rider.source === "teamMate"
+            ? " · équipier"
+            : rider.favoriteTier === "favorite"
+              ? " · favori"
+              : rider.favoriteTier === "contender"
+                ? " · prétendant"
+                : rider.favoriteTier === "outsider"
+                  ? " · outsider"
+                  : ""}
+        </small>
+      </div>
+    </div>
+  );
   return (
     <section className="current-group-panel" aria-label="Coureurs avec Julian">
       <div className="current-group-heading">
@@ -1194,7 +1242,7 @@ function CurrentGroupPanel({
         </div>
         <small>
           {favorites
-            ? `${favorites} favori${favorites > 1 ? "s" : ""} à proximité`
+            ? `★ ${favorites} favori${favorites > 1 ? "s" : ""} à proximité`
             : "Aucun favori à proximité"}
         </small>
       </div>
@@ -1206,33 +1254,14 @@ function CurrentGroupPanel({
             <small>{state.position}e · votre position</small>
           </div>
         </div>
-        {riders.map((rider) => (
-          <div className="group-rider" key={rider.riderId}>
-            <span>
-              {rider.source === "teamMate"
-                ? "ÉQ"
-                : rider.favoriteTier
-                  ? "★"
-                  : "·"}
-            </span>
-            <div>
-              <b>{rider.name}</b>
-              <small>
-                {profileLabels[rider.profile]}
-                {rider.source === "teamMate"
-                  ? " · équipier"
-                  : rider.favoriteTier === "favorite"
-                    ? " · favori"
-                    : rider.favoriteTier === "contender"
-                      ? " · prétendant"
-                      : rider.favoriteTier === "outsider"
-                        ? " · outsider"
-                        : ""}
-              </small>
-            </div>
-          </div>
-        ))}
+        {visibleRiders.map(riderLine)}
       </div>
+      {riders.length > visibleRiders.length && (
+        <details className="group-rider-details">
+          <summary>+{riders.length - visibleRiders.length} coureurs</summary>
+          <div className="group-rider-list full">{riders.map(riderLine)}</div>
+        </details>
+      )}
     </section>
   );
 }
@@ -1276,7 +1305,9 @@ function InteractiveRaceModal({
               progress={progress}
               race={raceData}
             />
-            <CurrentGroupPanel state={state} />
+            {raceData.terrain !== "chrono" && (
+              <CurrentGroupPanel state={state} />
+            )}
             {state.log.length > 0 && (
               <div className="race-last-event">
                 <span className="eyebrow">DERNIÈRE DÉCISION</span>
